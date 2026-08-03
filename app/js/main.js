@@ -263,6 +263,7 @@ function loop(t){
 function startGame(){
   if(started)return;
   started=true;
+  disposeMenuScene(); // 销毁首页 3D 背景，进入游戏主场景
   ac();
   hide('start');
   show('hud');
@@ -1275,6 +1276,8 @@ function initStartUI(){
   $('newSaveName').addEventListener('keydown',e=>{
     if(e.key==='Enter'){$('newSaveBtn').click();e.stopPropagation();}
   });
+  const hb=$('helpBtn');
+  if(hb)hb.addEventListener('click',()=>{const h=$('help');if(h)h.classList.toggle('hidden');});
   const sf=$('saveFab');
   if(sf)sf.addEventListener('click',saveNow);
 }
@@ -1326,6 +1329,7 @@ function initMiscUI(){
   window.addEventListener('pagehide',saveGame);
   window.addEventListener('beforeunload',saveGame);
   requestAnimationFrame(loop);
+  initMenuScene(); // 首页 3D panorama 背景（MC 主菜单风格）
 }
 function init(){
   initCore();
@@ -1337,3 +1341,124 @@ function init(){
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
 else init();
+
+// ================ 首页 3D 背景（MC 主菜单 panorama 风格） ================
+// 独立 renderer/scene/camera，与游戏主场景完全隔离；startGame 时销毁释放 WebGL context
+let menuRenderer=null,menuScene=null,menuCamera=null,menuRafId=0,menuClouds=[],menuResizeFn=null;
+function makeCanvasTex(draw){
+  const c=document.createElement('canvas');c.width=16;c.height=16;
+  draw(c.getContext('2d'));
+  const t=new THREE.CanvasTexture(c);
+  t.magFilter=THREE.NearestFilter;t.minFilter=THREE.NearestFilter; // 像素纹理（MC 质感）
+  return t;
+}
+function menuGrassSideTex(){return makeCanvasTex(g=>{
+  g.fillStyle='#8a6a3f';g.fillRect(0,0,16,16);
+  for(let i=0;i<42;i++){g.fillStyle=Math.random()<.5?'#7a5c36':'#94754a';g.fillRect(Math.random()*16|0,Math.random()*16|0,1,1);}
+  g.fillStyle='#7fbd4f';g.fillRect(0,0,16,4);
+  for(let i=0;i<16;i++){g.fillStyle=Math.random()<.5?'#6fae42':'#8cc95e';g.fillRect(Math.random()*16|0,Math.random()*16|0,1,1);}
+});}
+function menuGrassTopTex(){return makeCanvasTex(g=>{
+  g.fillStyle='#7fbd4f';g.fillRect(0,0,16,16);
+  for(let i=0;i<48;i++){g.fillStyle=Math.random()<.5?'#6fae42':'#8cc95e';g.fillRect(Math.random()*16|0,Math.random()*16|0,1,1);}
+});}
+function menuDirtTex(){return makeCanvasTex(g=>{
+  g.fillStyle='#8a6a3f';g.fillRect(0,0,16,16);
+  for(let i=0;i<48;i++){g.fillStyle=Math.random()<.5?'#7a5c36':'#94754a';g.fillRect(Math.random()*16|0,Math.random()*16|0,1,1);}
+});}
+function initMenuScene(){
+  if(menuRenderer||!document.getElementById('start'))return;
+  menuRenderer=new THREE.WebGLRenderer({antialias:false,alpha:true});
+  menuRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
+  menuRenderer.setSize(window.innerWidth,window.innerHeight);
+  const cv=menuRenderer.domElement;
+  cv.style.cssText='position:absolute;inset:0;z-index:0;width:100%;height:100%;pointer-events:none';
+  document.getElementById('start').appendChild(cv);
+  menuScene=new THREE.Scene();
+  menuScene.fog=new THREE.Fog(0x9ad7ef,26,74); // 远景雾化，MC 远处朦胧感
+  menuScene.add(new THREE.HemisphereLight(0xcfe8ff,0x8a6a4a,0.95));
+  menuScene.add(new THREE.AmbientLight(0xffffff,0.35));
+  const sunL=new THREE.DirectionalLight(0xfff2d0,1.15);sunL.position.set(18,30,10);menuScene.add(sunL);
+  // 地面：32×32 草方块（顶面草纹 + 四面泥土边）
+  const side=menuGrassSideTex(),top=menuGrassTopTex(),dirt=menuDirtTex();
+  const ground=new THREE.Mesh(new THREE.BoxGeometry(32,1,32),
+    [new THREE.MeshLambertMaterial({map:side}),new THREE.MeshLambertMaterial({map:side}),
+     new THREE.MeshLambertMaterial({map:top}),new THREE.MeshLambertMaterial({map:dirt}),
+     new THREE.MeshLambertMaterial({map:side}),new THREE.MeshLambertMaterial({map:side})]);
+  ground.position.y=-0.5;menuScene.add(ground);
+  // 树（原木 + 双层树叶）
+  const logM=new THREE.MeshLambertMaterial({map:dirt});
+  const leafM=new THREE.MeshLambertMaterial({map:menuGrassTopTex()});
+  [[-9,4],[-5,-8],[7,6],[11,-5],[-13,-4],[4,-12],[-2,12],[13,9],[-8,13]].forEach(([x,z])=>{
+    const g=new THREE.Group();
+    const trunk=new THREE.Mesh(new THREE.BoxGeometry(1,3,1),logM);trunk.position.y=1.5;g.add(trunk);
+    const l1=new THREE.Mesh(new THREE.BoxGeometry(3,1.4,3),leafM);l1.position.y=3.2;g.add(l1);
+    const l2=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.2,1.6),leafM);l2.position.y=4.6;g.add(l2);
+    g.position.set(x,0,z);menuScene.add(g);
+  });
+  // 远山（石头金字塔 + 雪顶）
+  const stoneM=new THREE.MeshLambertMaterial({color:0x8f9296});
+  const snowM=new THREE.MeshLambertMaterial({color:0xf5f6f7});
+  [[-26,-20],[22,-26],[-27,18],[26,22],[0,27]].forEach(([hx,hz])=>{
+    const g=new THREE.Group();
+    for(let i=0;i<3;i++){
+      const s=14-i*4.5;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(s,s,s),i<2?stoneM:snowM);
+      m.position.y=i*2.4+1;g.add(m);
+    }
+    g.position.set(hx,0,hz);menuScene.add(g);
+  });
+  // 云（白色方块群，缓慢平移循环）
+  const cloudM=new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:0.92});
+  for(let i=0;i<6;i++){
+    const g=new THREE.Group();
+    for(let j=0;j<3;j++){
+      const m=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.7,2),cloudM);
+      m.position.set(j*2-2,Math.random()*0.5,(Math.random()-0.5)*1.5);g.add(m);
+    }
+    g.position.set((Math.random()*40-20),13+i%3*3+Math.random()*2,(Math.random()*40-20));
+    g.userData.sx=g.position.x;
+    menuScene.add(g);menuClouds.push(g);
+  }
+  // 太阳（Sprite 光晕，自动面向相机）
+  const sunSpr=new THREE.Sprite(new THREE.SpriteMaterial({map:makeCanvasTex(g=>{
+    const grad=g.createRadialGradient(8,8,1,8,8,8);
+    grad.addColorStop(0,'rgba(255,238,160,1)');grad.addColorStop(.55,'rgba(255,205,80,1)');grad.addColorStop(1,'rgba(255,205,80,0)');
+    g.fillStyle=grad;g.fillRect(0,0,16,16);
+  }),transparent:true,depthWrite:false}));
+  sunSpr.scale.set(14,14,1);sunSpr.position.set(46,26,-22);menuScene.add(sunSpr);
+  // 相机：绕世界中心缓慢环绕（MC panorama 同款）
+  menuCamera=new THREE.PerspectiveCamera(62,window.innerWidth/window.innerHeight,0.1,300);
+  menuCamera.position.set(26,6.5,0);
+  menuCamera.lookAt(0,3,0);
+  menuResizeFn=()=>{
+    menuCamera.aspect=window.innerWidth/window.innerHeight;menuCamera.updateProjectionMatrix();
+    menuRenderer.setSize(window.innerWidth,window.innerHeight);
+  };
+  window.addEventListener('resize',menuResizeFn);
+  const tick=()=>{
+    if(!menuRenderer)return;
+    const t=performance.now()/1000;
+    const a=t*0.06;
+    menuCamera.position.set(Math.cos(a)*26,6.5,Math.sin(a)*26);
+    menuCamera.lookAt(0,3,0);
+    for(let i=0;i<menuClouds.length;i++){
+      const c=menuClouds[i];
+      c.position.x=((c.userData.sx+t*0.5+90)%180)-90;
+    }
+    menuRenderer.render(menuScene,menuCamera);
+    menuRafId=requestAnimationFrame(tick);
+  };
+  menuRafId=requestAnimationFrame(tick);
+}
+function disposeMenuScene(){
+  if(menuRafId){cancelAnimationFrame(menuRafId);menuRafId=0;}
+  if(menuResizeFn){window.removeEventListener('resize',menuResizeFn);menuResizeFn=null;}
+  if(menuRenderer){
+    menuRenderer.dispose();
+    const el=menuRenderer.domElement;
+    if(el&&el.parentNode)el.parentNode.removeChild(el);
+    menuRenderer=null;
+  }
+  menuScene=null;menuCamera=null;menuClouds=[];
+}

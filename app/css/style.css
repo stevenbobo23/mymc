@@ -3,80 +3,49 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:"Co
 #game{position:fixed;inset:0}
 #game canvas{display:block}
 .hidden{display:none!important}
-/* ========== 开始界面（Minecraft 风格） ========== */
+/* ========== 开始界面（MC 主菜单风格：3D panorama 背景） ========== */
 #start{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;
-background:linear-gradient(180deg,#4fb8e8 0%,#7fd0f0 36%,#aee6c8 45%,#7ec850 46.2%,#5aa832 57%,#6f9a2e 61%,#5a4426 61.4%,#46341f 100%)}
-/* 16px 像素网格，营造 MC 方块质感 */
-#start::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
-background:
-repeating-linear-gradient(0deg,transparent 0 16px,rgba(255,255,255,.055) 16px 16.6px),
-repeating-linear-gradient(90deg,transparent 0 16px,rgba(255,255,255,.055) 16px 16.6px)}
-/* 装饰层：太阳 / 云 / 漂浮草方块 */
-.mc-deco{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.sun{position:absolute;top:11%;right:9%;width:96px;height:96px;border-radius:50%;
-background:radial-gradient(circle at 42% 42%,#fffbe8 0%,#ffe98a 34%,#ffcf4d 62%,rgba(255,207,77,0) 78%);
-animation:sunGlow 5s ease-in-out infinite}
-@keyframes sunGlow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
-.cloud{position:absolute;background:#fff;border-radius:20px;opacity:.94;filter:drop-shadow(0 3px 3px rgba(40,80,120,.28));animation:drift linear infinite}
-.cloud::before,.cloud::after{content:"";position:absolute;background:#fff;border-radius:50%}
-.c1{width:130px;height:34px;top:13%;left:6%;animation-duration:70s}
-.c1::before{width:56px;height:56px;top:-30px;left:24px}
-.c1::after{width:40px;height:40px;top:-20px;left:76px}
-.c2{width:100px;height:28px;top:26%;left:20%;opacity:.82;animation-duration:95s;animation-delay:6s}
-.c2::before{width:44px;height:44px;top:-24px;left:20px}
-.c2::after{width:32px;height:32px;top:-16px;left:58px}
-.c3{width:150px;height:36px;top:7%;left:42%;opacity:.78;animation-duration:120s;animation-delay:12s}
-.c3::before{width:60px;height:60px;top:-32px;left:30px}
-.c3::after{width:44px;height:44px;top:-22px;left:88px}
-@keyframes drift{from{transform:translateX(-300px)}to{transform:translateX(calc(100vw + 300px))}}
-/* 漂浮的草方块（草皮+泥土+像素噪点） */
-.float-block{position:absolute;width:56px;height:56px;
-background:
-linear-gradient(90deg,rgba(0,0,0,.14) 25%,transparent 25%) 0 0/8px 8px,
-linear-gradient(90deg,transparent 25%,rgba(255,255,255,.10) 25%) 0 0/8px 8px,
-linear-gradient(180deg,#7fbd4f 0 15%,#6fae42 15% 21%,#8a6a3f 21% 100%);
-border:2px solid #24380f;box-shadow:inset -4px 0 0 rgba(0,0,0,.16),inset 4px 4px 0 rgba(255,255,255,.10),0 12px 22px rgba(0,0,0,.38);
-animation:floatY 5.5s ease-in-out infinite}
-@keyframes floatY{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-16px) rotate(4deg)}}
-.fb1{left:6%;top:22%;animation-delay:0s}
-.fb2{right:6%;top:30%;width:44px;height:44px;animation-delay:1.2s;animation-duration:6.5s}
-.fb3{left:4%;top:78%;width:60px;height:60px;animation-delay:.6s;animation-duration:4.8s;opacity:.88}
+background:linear-gradient(180deg,#87ceeb 0%,#a8dff5 100%)}
+/* 底部深色渐晕：让按钮区在 3D 背景上清晰可读（MC 主菜单同款） */
+#start::after{content:"";position:absolute;left:0;right:0;bottom:0;height:68%;z-index:0;pointer-events:none;
+background:linear-gradient(180deg,rgba(8,10,18,0) 0%,rgba(8,10,18,.42) 52%,rgba(8,10,18,.78) 100%)}
 /* 标题：MC 大 Logo + 金色光芒扫过 */
-#start h1.mc-title{position:relative;z-index:1;overflow:hidden;font-size:52px;letter-spacing:8px;margin-bottom:4px;padding:6px 22px;flex-shrink:0;animation:titleFloat 5s ease-in-out infinite}
-#start h1.mc-title>span{color:#fff;text-shadow:5px 5px 0 #3a3a3a,9px 9px 0 rgba(0,0,0,.3)}
+#start h1.mc-title{position:relative;z-index:1;overflow:hidden;font-size:56px;letter-spacing:8px;margin-bottom:4px;padding:6px 22px;flex-shrink:0;animation:titleFloat 5s ease-in-out infinite}
+#start h1.mc-title>span{color:#fff;text-shadow:5px 5px 0 #2e2e2e,9px 9px 0 rgba(0,0,0,.35)}
 #start h1.mc-title::after{content:"";position:absolute;top:-15%;bottom:-15%;width:32%;left:-45%;transform:skewX(-14deg);
-background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,.55) 50%,transparent 100%);animation:shine 5.5s ease-in-out infinite}
+background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,.5) 50%,transparent 100%);animation:shine 5.5s ease-in-out infinite}
 @keyframes shine{0%{left:-45%}55%,100%{left:135%}}
 @keyframes titleFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
-#start .sub{color:#ff9;font-size:14px;text-shadow:2px 2px 0 #333;margin-bottom:18px;z-index:1;letter-spacing:1px}
+#start .sub{color:#fff;font-size:14px;text-shadow:2px 2px 0 rgba(0,0,0,.5);margin-bottom:20px;z-index:1;letter-spacing:1px;opacity:.92}
 /* MC 灰石按钮（hover 变蓝，按下下沉） */
 .mcbtn{font-family:inherit;cursor:pointer;color:#fff;font-size:17px;padding:9px 24px;position:relative;z-index:1;margin-top:9px;
 min-width:240px;text-align:center;line-height:1.35;
 background:linear-gradient(180deg,#8d8d8d 0%,#7a7a7a 28%,#6f6f6f 62%,#636363 100%);
-border:2px solid #1c1c1c;text-shadow:2px 2px 0 #2a2a2a;
-box-shadow:inset 0 3px 0 rgba(255,255,255,.30),inset 0 -3px 0 rgba(0,0,0,.30),inset 3px 0 0 rgba(255,255,255,.12),inset -3px 0 0 rgba(0,0,0,.18),0 4px 0 #1c1c1c;
+border:2px solid #161616;text-shadow:2px 2px 0 #2a2a2a;
+box-shadow:inset 0 3px 0 rgba(255,255,255,.30),inset 0 -3px 0 rgba(0,0,0,.30),inset 3px 0 0 rgba(255,255,255,.12),inset -3px 0 0 rgba(0,0,0,.18),0 4px 0 #161616;
 transition:background .12s,filter .12s}
-.mcbtn:hover{background:linear-gradient(180deg,#4f8fcf 0%,#3f7fbf 30%,#3a76b4 70%,#326aa6 100%);box-shadow:inset 0 3px 0 rgba(255,255,255,.38),inset 0 -3px 0 rgba(0,0,0,.30),0 4px 0 #1c1c1c}
-.mcbtn:active{transform:translateY(3px);box-shadow:inset 0 3px 0 rgba(255,255,255,.25),inset 0 -3px 0 rgba(0,0,0,.32),0 1px 0 #1c1c1c}
+.mcbtn:hover{background:linear-gradient(180deg,#4f8fcf 0%,#3f7fbf 30%,#3a76b4 70%,#326aa6 100%);box-shadow:inset 0 3px 0 rgba(255,255,255,.38),inset 0 -3px 0 rgba(0,0,0,.30),0 4px 0 #161616}
+.mcbtn:active{transform:translateY(3px);box-shadow:inset 0 3px 0 rgba(255,255,255,.25),inset 0 -3px 0 rgba(0,0,0,.32),0 1px 0 #161616}
 #skinRow .mcbtn,#modeRow .mcbtn{margin-top:0}
 .mcbtn-big{font-size:22px;padding:14px 28px;margin-top:12px;min-width:320px}
-.mcbtn-sm{padding:8px 18px;font-size:20px}
+.mcbtn-sm{padding:8px 18px;font-size:16px;min-width:0}
 .mcbtn-green{background:linear-gradient(180deg,#5fa84f,#4a8a3e)}
-.mcbtn-blue{background:linear-gradient(180deg,#4f7fbf,#3a62a6)}
 .mcbtn-red{background:linear-gradient(180deg,#b05454,#8a3a3a)}
 .mcbtn-orange{background:linear-gradient(180deg,#b07a3a,#8a5a2a)}
 .mcbtn-gray{background:linear-gradient(180deg,#6f6f6f,#565656)}
+/* 右上角皮肤小面板 */
+.skinArrow{min-width:0!important;padding:3px 10px;font-size:18px}
 /* 模式按钮：保留绿/蓝色辨识度，选中态白色光晕 */
-.modeBtn{font-size:17px;padding:10px 22px}
+.modeBtn{min-width:130px!important;font-size:15px;padding:8px 16px}
 #modeSurvival{background:linear-gradient(180deg,#5fa84f,#4a8a3e)}
 #modeCreative{background:linear-gradient(180deg,#4f7fbf,#3a62a6)}
 #modeSurvival:hover{background:linear-gradient(180deg,#6fc05f,#56a449)}
 #modeCreative:hover{background:linear-gradient(180deg,#5f8fcf,#4a72b6)}
-#modeSurvival.sel,#modeCreative.sel{border-color:#fff;box-shadow:inset 0 3px 0 rgba(255,255,255,.4),inset 0 -3px 0 rgba(0,0,0,.3),0 0 14px rgba(255,255,255,.55),0 4px 0 #1c1c1c}
+#modeSurvival.sel,#modeCreative.sel{border-color:#fff;box-shadow:inset 0 3px 0 rgba(255,255,255,.4),inset 0 -3px 0 rgba(0,0,0,.3),0 0 14px rgba(255,255,255,.55),0 4px 0 #161616}
 /* 皮肤展示框：MC 立体边框 */
 .mc-skin{border:3px solid #5a5a5a;box-shadow:inset 0 3px 0 rgba(255,255,255,.28),inset 0 -3px 0 rgba(0,0,0,.45),0 6px 14px rgba(0,0,0,.45)}
-/* 帮助面板：MC 半透明 GUI */
-.help{z-index:1;margin-top:14px;background:rgba(10,10,14,.66);border:2px solid rgba(255,255,255,.22);border-radius:6px;
+/* 帮助面板：MC 半透明 GUI（默认折叠，点「操作帮助」展开） */
+.help{z-index:1;margin-top:10px;background:rgba(10,10,14,.82);border:2px solid rgba(255,255,255,.25);border-radius:6px;
 box-shadow:inset 0 2px 0 rgba(255,255,255,.14),inset 0 -3px 0 rgba(0,0,0,.45),0 8px 20px rgba(0,0,0,.5);
 color:#eee;padding:10px 18px;font-size:12px;line-height:1.6;max-width:640px}
 .help b{color:#ffd24a}

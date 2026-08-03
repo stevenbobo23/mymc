@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:,">
 <title>方块世界 - Minecraft风格网页游戏</title>
-    <link rel="stylesheet" href="css/style.css?v=20260803o">
+    <link rel="stylesheet" href="css/style.css?v=20260803p">
 
 </head>
 <body>
@@ -236,40 +236,32 @@
 </div>
 
 <div id="start">
-  <!-- MC 风格装饰层：太阳 / 云朵 / 漂浮方块 -->
-  <div class="mc-deco">
-    <div class="sun"></div>
-    <div class="cloud c1"></div>
-    <div class="cloud c2"></div>
-    <div class="cloud c3"></div>
-    <div class="float-block fb1"></div>
-    <div class="float-block fb2"></div>
-    <div class="float-block fb3"></div>
+  <!-- 皮肤选择：右上角小面板（游戏内背包里也能换） -->
+  <div id="skinRow" style="position:absolute;top:14px;right:14px;z-index:1;display:flex;align-items:center;gap:8px">
+    <button class="mcbtn skinArrow" id="skinPrev">‹</button>
+    <div style="text-align:center">
+      <canvas id="skinCv" width="64" height="128" class="mc-skin" style="image-rendering:pixelated;height:88px;width:auto;background:rgba(0,0,0,.35)"></canvas>
+      <div id="skinName" style="margin-top:2px;font-size:13px;color:#ffd;text-shadow:1px 1px 0 #000">史蒂夫</div>
+    </div>
+    <button class="mcbtn skinArrow" id="skinNext">›</button>
   </div>
   <h1 class="mc-title"><span>方块世界</span></h1>
   <div class="sub">— Minecraft 风格网页沙盒 —</div>
-  <div id="skinRow" style="display:flex;align-items:center;gap:10px;margin:14px 0 4px;z-index:1">
-    <button class="mcbtn mcbtn-sm skinArrow" id="skinPrev">‹</button>
-    <div style="text-align:center">
-      <canvas id="skinCv" width="64" height="128" class="mc-skin" style="image-rendering:pixelated;height:100px;width:auto;background:rgba(0,0,0,.35)"></canvas>
-      <div id="skinName" style="margin-top:4px;font-size:15px;color:#ffd;text-shadow:1px 1px 0 #000">史蒂夫</div>
-    </div>
-    <button class="mcbtn mcbtn-sm skinArrow" id="skinNext">›</button>
-  </div>
-  <div id="modeRow" style="display:flex;gap:12px;margin:10px 0 14px;z-index:1">
-    <button class="mcbtn modeBtn" id="modeSurvival">⚒ 生存模式<br><span style="font-size:12px;opacity:.85">挖矿收集 · 有血量和怪物</span></button>
-    <button class="mcbtn modeBtn" id="modeCreative">🧱 创造模式<br><span style="font-size:12px;opacity:.85">无限物品 · 飞行 · 不掉血</span></button>
+  <div id="modeRow" style="display:flex;gap:10px;margin:4px 0 12px;z-index:1">
+    <button class="mcbtn modeBtn" id="modeSurvival">⚒ 生存</button>
+    <button class="mcbtn modeBtn" id="modeCreative">🧱 创造</button>
   </div>
   <button id="startBtn" class="mcbtn mcbtn-big">点击开始</button>
-  <button id="newWorldBtn" class="mcbtn mcbtn-orange hidden">🌍 创建新世界（随机地图）</button>
-  <button id="saveDirBtn" class="mcbtn mcbtn-blue">💾 存档目录</button>
-  <button id="shooterBtn" class="mcbtn mcbtn-red">🔫 枪战模式（建房间对战）</button>
+  <button id="newWorldBtn" class="mcbtn mcbtn-orange hidden">🌍 创建新世界</button>
+  <button id="saveDirBtn" class="mcbtn">💾 存档目录</button>
+  <button id="shooterBtn" class="mcbtn mcbtn-red">🔫 枪战模式</button>
+  <button id="mpBtn" class="mcbtn mcbtn-green">🌐 联机大厅</button>
+  <button id="helpBtn" class="mcbtn mcbtn-sm mcbtn-gray" style="min-width:150px">📖 操作帮助</button>
   <div id="scenePanel" class="mc-overlay hidden">
     <h2 style="color:#ffd24a;font-size:26px;margin-bottom:14px;text-shadow:2px 2px 0 #000">🎯 选择枪战场景</h2>
     <div id="sceneList" style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:760px"></div>
     <button id="sceneCancelBtn" class="mcbtn mcbtn-gray" style="margin-top:16px;font-size:16px;padding:9px 30px">取消</button>
   </div>
-  <button id="mpBtn" class="mcbtn mcbtn-green">🌐 联机大厅</button>
   <!-- 存档目录面板 -->
   <div id="savePanel" class="mc-overlay hidden">
     <div class="mc-dialog">
@@ -286,7 +278,7 @@
       </div>
     </div>
   </div>
-  <div class="help">
+  <div id="help" class="help hidden">
     <div class="cols">
       <div>
         <b>💻 桌面操作</b><br>
@@ -307,13 +299,13 @@
   </div>
 </div>
 
-    <script src="js/error.js?v=20260803o"></script>
-    <script src="js/three.min.js?v=20260803o"></script>
-    <script src="js/tools.js?v=20260803o"></script>
-    <script src="js/world.js?v=20260803o"></script>
-    <script src="js/player.js?v=20260803o"></script>
-    <script src="js/mobs.js?v=20260803o"></script>
-    <script src="js/ui.js?v=20260803o"></script>
-    <script src="js/main.js?v=20260803o"></script>
+    <script src="js/error.js?v=20260803p"></script>
+    <script src="js/three.min.js?v=20260803p"></script>
+    <script src="js/tools.js?v=20260803p"></script>
+    <script src="js/world.js?v=20260803p"></script>
+    <script src="js/player.js?v=20260803p"></script>
+    <script src="js/mobs.js?v=20260803p"></script>
+    <script src="js/ui.js?v=20260803p"></script>
+    <script src="js/main.js?v=20260803p"></script>
 </body>
 </html>
