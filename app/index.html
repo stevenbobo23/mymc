@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:,">
+<title>方块世界 - Minecraft风格网页游戏</title>
+    <link rel="stylesheet" href="css/style.css?v=20260803o">
+
+</head>
+<body>
+<div id="game"></div>
+<div id="flash"></div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="crosshair">+</div>
+  <div id="minebar"><div id="minefill"></div></div>
+  <div id="bossbar" style="display:none;position:fixed;top:8px;left:50%;transform:translateX(-50%);width:min(60vw,340px);z-index:40;text-align:center">
+    <div style="color:#e0a0ff;font-size:14px;font-weight:bold;text-shadow:1px 1px 2px #000">🐉 末影龙</div>
+    <div style="height:10px;background:#00000088;border:2px solid #555;border-radius:5px;margin-top:2px">
+      <div id="bossfill" style="height:100%;width:100%;background:linear-gradient(#c060e8,#8020b0);border-radius:3px"></div>
+    </div>
+  </div>
+  <div id="tasks" style="display:none"></div>
+  <div id="bottomleft">
+    <canvas id="armorCv" width="182" height="18"></canvas>
+    <canvas id="heartsCv" width="182" height="18"></canvas>
+  </div>
+  <div id="hotbar"></div>
+  <div id="btnBookHud">📖 配方</div>
+  <!-- 枪战 HUD（shooter 模式显示） -->
+  <div id="gunHud" style="display:none;position:absolute;left:50%;bottom:86px;transform:translateX(-50%);text-align:center;pointer-events:none;z-index:20">
+    <div id="gunName" style="color:#fff;font-size:15px;font-weight:bold;text-shadow:1px 1px 2px #000"></div>
+    <div id="gunAmmo" style="color:#fff;font-size:22px;font-weight:bold;text-shadow:1px 1px 2px #000;font-family:Consolas,monospace"></div>
+    <div style="color:#aaa;font-size:11px;margin-top:2px">1-7 切武器 · 子弹打空自动换弹 · G 手榴弹(蓄力,用完自动装填) · 6地雷 · 7掩体方块右键搭墙 · 左键射击</div>
+    <div style="width:130px;height:7px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.4);margin:4px auto 0;border-radius:3px;overflow:hidden"><div id="nadeCharge" style="display:none;height:100%;width:0%;background:linear-gradient(90deg,#8a3a3a,#ff6a3a);transition:width .05s linear"></div></div>
+  </div>
+  <div id="gunBoard" style="display:none;position:absolute;right:10px;top:10px;background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.3);color:#fff;padding:8px 12px;font-size:13px;line-height:1.7;text-align:right;pointer-events:none;z-index:20"></div>
+  <!-- 枪战击杀横幅（连杀提示） -->
+  <div id="killBanner" style="display:none;position:absolute;left:50%;top:22%;transform:translateX(-50%);color:#ffd24a;font-size:44px;font-weight:bold;text-shadow:0 0 18px rgba(255,120,0,.9),2px 2px 0 #000;-webkit-text-stroke:1px #000;pointer-events:none;z-index:30;text-align:center"></div>
+  <!-- 伤害飘字层 -->
+  <div id="dmgLayer" style="position:absolute;inset:0;pointer-events:none;z-index:28;overflow:hidden"></div>
+  <!-- 出生保护提示 -->
+  <div id="spawnShield" style="display:none;position:absolute;left:50%;bottom:130px;transform:translateX(-50%);color:#9fd4ff;font-size:15px;font-weight:bold;text-shadow:1px 1px 2px #000;pointer-events:none;z-index:30">🛡 出生保护中（3 秒）</div>
+  <button id="saveFab" title="立即保存当前世界" style="position:absolute;left:10px;bottom:10px;z-index:25;font-size:15px;padding:9px 12px;background:linear-gradient(#3a5a7a,#2a3e5e);border:2px solid #222;color:#fff;border-radius:10px;cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.5);pointer-events:auto;display:none">💾 <span id="saveFabName" style="font-size:11px;opacity:.85"></span></button>
+  <button id="mpFab" title="联机大厅（创建/加入/断开）按 M 打开" style="position:absolute;right:10px;bottom:10px;z-index:25;font-size:19px;padding:10px 14px;background:linear-gradient(#3a7a3a,#2a5e2a);border:2px solid #222;color:#fff;border-radius:10px;cursor:pointer;box-shadow:0 3px 8px rgba(0,0,0,.5);pointer-events:auto">🌐</button>
+  <div id="mpBadge" style="position:absolute;right:66px;bottom:16px;z-index:25;color:#ffd75e;font-size:12px;text-shadow:1px 1px 2px #000;background:rgba(0,0,0,.4);padding:3px 8px;border-radius:6px;display:none;pointer-events:none"></div>
+</div>
+
+<!-- 背包面板 -->
+<div id="invPanel" class="panel hidden">
+  <button class="closeX" data-close="invPanel">×</button>
+  <h3>背包 / 合成</h3>
+  <div class="hint">点击=整堆移动 · 右键/长按=单个放置 · 空光标右键=拿一半 · 点护甲格装备 · <b style="color:#ffd75e">点成品=一次全部合成</b></div>
+  <div class="prow">
+    <div class="pcol">
+      <div class="plabel">护甲</div>
+      <div id="armorSlots" class="pcol"></div>
+    </div>
+    <div class="pcol">
+      <div class="plabel">预览</div>
+      <canvas id="dollCv" width="64" height="128"></canvas>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+        <button id="skinPrev2" style="padding:2px 10px;font-size:16px">‹</button>
+        <span id="skinName2" style="font-size:13px;color:#ffd">史蒂夫</span>
+        <button id="skinNext2" style="padding:2px 10px;font-size:16px">›</button>
+      </div>
+    </div>
+    <div class="pcol">
+      <div class="plabel">合成 (2×2)</div>
+      <div class="craftrow">
+        <div id="craftGrid" class="grid g2"></div>
+        <div id="craftArrow">➜</div>
+        <div id="craftOut"></div>
+      </div>
+    </div>
+  </div>
+  <div class="plabel" style="margin:10px 0 2px">物品栏</div>
+  <div id="invGrid" class="grid g9"></div>
+  <div class="plabel" style="margin:8px 0 2px">快捷栏</div>
+  <div id="invHotbar" class="grid g9"></div>
+  <div id="creativeArea" class="hidden">
+    <div class="plabel" style="margin:10px 0 2px;color:#ffd75e">🧱 创造物品库 · 轻点拿取 · 上下滑动看更多 ↕</div>
+    <div id="creativeGrid" class="grid g9" style="max-height:240px;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+  </div>
+</div>
+
+<!-- 工作台面板 -->
+<div id="tablePanel" class="panel hidden">
+  <button class="closeX" data-close="tablePanel">×</button>
+  <h3>工作台 (3×3 合成)</h3>
+  <div class="hint">点击=整堆移动 · 右键/长按=单个放置 · 空光标右键=拿一半 · <b style="color:#ffd75e">点成品=一次全部合成</b></div>
+  <div class="craftrow" style="justify-content:center;margin-bottom:10px">
+    <div id="tableGrid" class="grid g3"></div>
+    <div id="craftArrow">➜</div>
+    <div id="tableOut"></div>
+  </div>
+  <div class="plabel" style="margin:10px 0 2px">物品栏</div>
+  <div id="tableInvGrid" class="grid g9"></div>
+  <div class="plabel" style="margin:8px 0 2px">快捷栏</div>
+  <div id="tableHotbar" class="grid g9"></div>
+</div>
+
+<!-- 熔炉面板 -->
+<div id="furnacePanel" class="panel hidden">
+  <button class="closeX" data-close="furnacePanel">×</button>
+  <h3>熔炉</h3>
+  <div class="hint">上格放原料，下格放燃料(煤/木板/原木) · 右键/长按=单个放置</div>
+  <div class="craftrow" style="justify-content:center">
+    <div class="pcol">
+      <div id="furnInSlot"></div>
+      <div id="furnFire">🔥</div>
+      <div id="furnFuelSlot"></div>
+    </div>
+    <div class="pcol">
+      <div id="furnProgWrap"><div id="furnProg"></div></div>
+      <div class="plabel">➜</div>
+    </div>
+    <div id="furnOutSlot"></div>
+  </div>
+  <div class="plabel" style="margin:10px 0 2px">物品栏</div>
+  <div id="furnInvGrid" class="grid g9"></div>
+  <div class="plabel" style="margin:8px 0 2px">快捷栏</div>
+  <div id="furnHotbar" class="grid g9"></div>
+</div>
+
+<!-- 箱子面板 -->
+<div id="chestPanel" class="panel hidden">
+  <button class="closeX" data-close="chestPanel">×</button>
+  <h3>📦 箱子</h3>
+  <div class="hint">把东西放进来存好，下次还在！</div>
+  <div id="chestGrid" class="grid g9"></div>
+  <div class="plabel" style="margin:10px 0 2px">物品栏</div>
+  <div id="chestInvGrid" class="grid g9"></div>
+  <div class="plabel" style="margin:8px 0 2px">快捷栏</div>
+  <div id="chestHotbar" class="grid g9"></div>
+</div>
+
+<!-- 附魔台面板 -->
+<div id="enchPanel" class="panel hidden">
+  <button class="closeX" data-close="enchPanel">×</button>
+  <h3>✨ 附魔台</h3>
+  <div class="hint">把装备放进格子，点按钮附魔（每次花 1 颗💎钻石，最高 3 级）</div>
+  <div class="craftrow" style="justify-content:center">
+    <div id="enchSlot"></div>
+  </div>
+  <div id="enchInfo" class="hint" style="text-align:center;margin:6px 0">放入武器/工具/盔甲/弓</div>
+  <div class="craftrow" style="justify-content:center">
+    <button id="btnDoEnch" style="font-family:inherit;font-size:15px;padding:8px 18px;background:#7a3aa0;color:#fff;border:none;border-radius:8px;cursor:pointer">✨ 附魔！</button>
+  </div>
+  <div class="plabel" style="margin:10px 0 2px">物品栏</div>
+  <div id="enchInvGrid" class="grid g9"></div>
+  <div class="plabel" style="margin:8px 0 2px">快捷栏</div>
+  <div id="enchHotbar" class="grid g9"></div>
+</div>
+
+<!-- 联机大厅面板（公开房间，无需邀请码） -->
+<div id="mpPanel" class="panel hidden" style="z-index:150;max-height:92vh;overflow-y:auto">
+  <button class="closeX" data-close="mpPanel">×</button>
+  <h3>🌐 联机大厅（公开房间）</h3>
+  <div class="hint">点「创建房间」当房主，所有玩家都能在下方列表看到你的房间并直接加入，<b>不需要邀请码</b>。<b style="color:#ff8a8a">房主可随时点「删除房间并退出」解散房间，所有人都会被移出。</b></div>
+  <div style="display:flex;gap:10px;margin:12px 0;flex-wrap:wrap">
+    <input id="netName" maxlength="16" placeholder="你的昵称（显示在头像上方）" style="flex:1;min-width:150px;padding:10px 12px;font-size:15px;background:#222;color:#fff;border:1px solid #666;border-radius:6px">
+    <button id="mpHostBtn" style="padding:10px 18px;background:linear-gradient(#3a7a3a,#2a5e2a)">🏠 创建房间</button>
+    <button id="lobbyRefreshBtn" title="刷新房间列表" style="padding:10px 14px;font-size:15px">🔄</button>
+  </div>
+  <input id="roomName" maxlength="24" placeholder="房间名称（可自定义，留空则叫「方块世界」）" style="width:100%;padding:10px 12px;font-size:15px;background:#222;color:#fff;border:1px solid #666;border-radius:6px;box-sizing:border-box">
+  <div style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap">
+    <span style="color:#aaa;font-size:13px;line-height:32px">模式：</span>
+    <button id="modeBtn" data-mode="survival" style="padding:7px 14px;font-size:14px;background:linear-gradient(#3a6a3a,#2a4e2a);border:2px solid #ffd75e">⚒ 生存</button>
+    <button id="modeCreativeBtn" data-mode="creative" style="padding:7px 14px;font-size:14px;background:linear-gradient(#3a5a8a,#2a3e5e)">🧱 创造</button>
+    <button id="modeShooterBtn" data-mode="shooter" style="padding:7px 14px;font-size:14px;background:linear-gradient(#8a3a3a,#5e2a2a)">🔫 枪战</button>
+  </div>
+  <div id="roomList" style="margin-top:6px;max-height:300px;overflow-y:auto"></div>
+  <div id="mpPlayers" style="margin-top:12px"></div>
+  <div id="mpStatus" style="margin-top:10px;color:#ffd75e;font-size:14px"></div>
+  <button id="mpLeaveBtn" class="hidden" style="margin-top:8px;padding:8px 20px;background:linear-gradient(#a03a3a,#7a2a2a)">断开联机</button>
+</div>
+
+<!-- 触屏控件 -->
+<div id="touch" class="hidden">
+  <div id="joy"><div id="knob"></div></div>
+  <div id="btns">
+    <div class="tbtn" id="btnJump">跳跃</div>
+    <div class="tbtn hidden" id="btnFlyDown">下降</div>
+    <div class="tbtn" id="btnMine">挖掘</div>
+    <div class="tbtn" id="btnPlace">放置</div>
+  </div>
+  <div class="tbtn" id="btnInv">背包</div>
+  <div class="tbtn" id="btnBook">📖</div>
+  <div class="tbtn" id="btnCmd">💬</div>
+</div>
+
+<!-- 指令面板 -->
+<div id="cmdPanel" class="panel hidden" style="z-index:160">
+  <button class="closeX" data-close="cmdPanel">×</button>
+  <h3>💬 指令（管理员专用）</h3>
+  <div class="hint">联机时只有房主（管理员）能用指令。输入后点「执行」：</div>
+  <input id="cmdInput" type="text" placeholder="/gamemode creative" style="width:100%;font-size:16px;padding:10px;margin-top:8px;background:#222;color:#9fd48a;border:1px solid #555;border-radius:6px;box-sizing:border-box">
+  <button id="cmdRunBtn" style="margin-top:8px;padding:10px 24px">▶ 执行</button>
+  <div class="hint" style="margin-top:10px;line-height:1.9">
+    <b style="color:#ffd75e">/gamemode creative</b> 切换到创造模式<br>
+    <b style="color:#ffd75e">/gamemode survival</b> 切换到生存模式<br>
+    <b style="color:#ffd75e">/创造</b> 或 <b style="color:#ffd75e">/生存</b> 也可以哦<br>
+    <b style="color:#ffd75e">/summon 僵尸</b> 生成生物（牛/乌龟/快乐恶魂/嘎吱怪/僵尸/史莱姆）<br>
+    <b style="color:#ffd75e">/time day</b> 白天 · <b style="color:#ffd75e">/time night</b> 黑夜<br>
+    <b style="color:#ffd75e">/help</b> 查看所有指令
+  </div>
+</div>
+
+<!-- 配方图鉴面板 -->
+<div id="bookPanel" class="panel hidden">
+  <button class="closeX" data-close="bookPanel">×</button>
+  <h3>📖 配方图鉴</h3>
+  <div class="hint">所有物品的合成方法都在这里 · 左边是材料摆法，箭头右边是成品 · 点 × 关闭</div>
+  <div id="bookList"></div>
+</div>
+
+<div id="cursor" class="hidden"><canvas id="cursorCv" width="16" height="16"></canvas><span id="cursorCnt"></span></div>
+<div id="toast"></div>
+
+<div id="pause" class="overlay-full hidden">
+  <h2>游戏暂停</h2>
+  <p>鼠标已释放。点击下方按钮回到游戏。</p>
+  <button id="resumeBtn">继续游戏</button>
+</div>
+
+<div id="death" class="overlay-full hidden">
+  <h2 style="color:#f66">你死了！</h2>
+  <p id="deathMsg">从高处摔落</p>
+  <button id="respawnBtn">重生</button>
+</div>
+
+<div id="start">
+  <!-- MC 风格装饰层：太阳 / 云朵 / 漂浮方块 -->
+  <div class="mc-deco">
+    <div class="sun"></div>
+    <div class="cloud c1"></div>
+    <div class="cloud c2"></div>
+    <div class="cloud c3"></div>
+    <div class="float-block fb1"></div>
+    <div class="float-block fb2"></div>
+    <div class="float-block fb3"></div>
+  </div>
+  <h1 class="mc-title"><span>方块世界</span></h1>
+  <div class="sub">— Minecraft 风格网页沙盒 —</div>
+  <div id="skinRow" style="display:flex;align-items:center;gap:10px;margin:14px 0 4px;z-index:1">
+    <button class="mcbtn mcbtn-sm skinArrow" id="skinPrev">‹</button>
+    <div style="text-align:center">
+      <canvas id="skinCv" width="64" height="128" class="mc-skin" style="image-rendering:pixelated;height:100px;width:auto;background:rgba(0,0,0,.35)"></canvas>
+      <div id="skinName" style="margin-top:4px;font-size:15px;color:#ffd;text-shadow:1px 1px 0 #000">史蒂夫</div>
+    </div>
+    <button class="mcbtn mcbtn-sm skinArrow" id="skinNext">›</button>
+  </div>
+  <div id="modeRow" style="display:flex;gap:12px;margin:10px 0 14px;z-index:1">
+    <button class="mcbtn modeBtn" id="modeSurvival">⚒ 生存模式<br><span style="font-size:12px;opacity:.85">挖矿收集 · 有血量和怪物</span></button>
+    <button class="mcbtn modeBtn" id="modeCreative">🧱 创造模式<br><span style="font-size:12px;opacity:.85">无限物品 · 飞行 · 不掉血</span></button>
+  </div>
+  <button id="startBtn" class="mcbtn mcbtn-big">点击开始</button>
+  <button id="newWorldBtn" class="mcbtn mcbtn-orange hidden">🌍 创建新世界（随机地图）</button>
+  <button id="saveDirBtn" class="mcbtn mcbtn-blue">💾 存档目录</button>
+  <button id="shooterBtn" class="mcbtn mcbtn-red">🔫 枪战模式（建房间对战）</button>
+  <div id="scenePanel" class="mc-overlay hidden">
+    <h2 style="color:#ffd24a;font-size:26px;margin-bottom:14px;text-shadow:2px 2px 0 #000">🎯 选择枪战场景</h2>
+    <div id="sceneList" style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:760px"></div>
+    <button id="sceneCancelBtn" class="mcbtn mcbtn-gray" style="margin-top:16px;font-size:16px;padding:9px 30px">取消</button>
+  </div>
+  <button id="mpBtn" class="mcbtn mcbtn-green">🌐 联机大厅</button>
+  <!-- 存档目录面板 -->
+  <div id="savePanel" class="mc-overlay hidden">
+    <div class="mc-dialog">
+      <h2 id="savePanelTitle" style="color:#8ad4ff;font-size:22px;margin:0 0 4px;text-shadow:1px 1px 0 #000">💾 存档目录</h2>
+      <div class="hint" style="color:#aaa;font-size:12px;margin-bottom:12px">每个存档独立保存世界/背包/进度。进入游戏后点左下角 💾 保存，自动存档每 10 秒一次。</div>
+      <div id="saveList" style="display:flex;flex-direction:column;gap:8px;min-height:60px"></div>
+      <div id="newSaveWrap" style="display:flex;gap:8px;margin-top:14px">
+        <input id="newSaveName" maxlength="16" placeholder="新存档名字（留空自动命名）" style="flex:1;padding:8px 12px;font-size:14px;background:#222;color:#fff;border:1px solid #666;border-radius:6px">
+        <button id="newSaveBtn" class="mcbtn mcbtn-green" style="padding:8px 16px">➕ 新建存档</button>
+      </div>
+      <button id="roomNewWorldBtn" style="display:none;margin-top:14px;width:100%;padding:10px;font-size:15px;background:linear-gradient(#8a5a2a,#6e451e)">🆕 新世界开房（全新随机地图）</button>
+      <div style="text-align:center;margin-top:12px">
+        <button id="savePanelClose" class="mcbtn mcbtn-gray" style="font-size:15px;padding:8px 30px">关闭</button>
+      </div>
+    </div>
+  </div>
+  <div class="help">
+    <div class="cols">
+      <div>
+        <b>💻 桌面操作</b><br>
+        WASD 移动 · 空格 跳跃<br>
+        鼠标 转视角 · <b>左键</b> 挖掘/攻击<br>
+        <b>右键</b> 放置方块 / 打开工作台·熔炉<br>
+        E 打开背包 · <b>B 打开配方图鉴</b> · 1-9 / 滚轮 切换物品
+      </div>
+      <div>
+        <b>📱 iPad / 触屏操作</b><br>
+        左侧摇杆 移动 · 右半屏拖动 转视角<br>
+        右侧大按钮：跳跃 / 挖掘(按住) / 放置<br>
+        「背包」打开背包合成 · <b>「📖」查看全部配方</b><br>
+        合成：点物品→点合成格→点成品，一次全部合成（长按=放单个）
+      </div>
+    </div>
+    <div style="margin-top:8px;color:#9f9">目标：砍树→合成→挖矿→烧铁→做护甲→挖钻石→下界合金！跟着左上角任务走。</div>
+  </div>
+</div>
+
+    <script src="js/error.js?v=20260803o"></script>
+    <script src="js/three.min.js?v=20260803o"></script>
+    <script src="js/tools.js?v=20260803o"></script>
+    <script src="js/world.js?v=20260803o"></script>
+    <script src="js/player.js?v=20260803o"></script>
+    <script src="js/mobs.js?v=20260803o"></script>
+    <script src="js/ui.js?v=20260803o"></script>
+    <script src="js/main.js?v=20260803o"></script>
+</body>
+</html>

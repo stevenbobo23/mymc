@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# WorkBuddy 项目数据（不入库）
+.workbuddy/
+.agents/
+skills-lock.json
+
+# Node 依赖（clone 后 npm install 恢复）
+node_modules/
+
+# 游戏截图（项目文档用）
+*.png
+
+# 旧版单文件备份（当前版为 app/ 模块化版）
+app/index_original_backup.html
+app/index_working_20260802_premodular.html
+minecraft/

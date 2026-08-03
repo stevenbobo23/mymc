@@ -1,0 +1,189 @@
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:"Courier New",monospace;user-select:none;-webkit-user-select:none;touch-action:none}
+#game{position:fixed;inset:0}
+#game canvas{display:block}
+.hidden{display:none!important}
+/* ========== 开始界面（Minecraft 风格） ========== */
+#start{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;
+background:linear-gradient(180deg,#4fb8e8 0%,#7fd0f0 36%,#aee6c8 45%,#7ec850 46.2%,#5aa832 57%,#6f9a2e 61%,#5a4426 61.4%,#46341f 100%)}
+/* 16px 像素网格，营造 MC 方块质感 */
+#start::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+background:
+repeating-linear-gradient(0deg,transparent 0 16px,rgba(255,255,255,.055) 16px 16.6px),
+repeating-linear-gradient(90deg,transparent 0 16px,rgba(255,255,255,.055) 16px 16.6px)}
+/* 装饰层：太阳 / 云 / 漂浮草方块 */
+.mc-deco{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.sun{position:absolute;top:11%;right:9%;width:96px;height:96px;border-radius:50%;
+background:radial-gradient(circle at 42% 42%,#fffbe8 0%,#ffe98a 34%,#ffcf4d 62%,rgba(255,207,77,0) 78%);
+animation:sunGlow 5s ease-in-out infinite}
+@keyframes sunGlow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.18)}}
+.cloud{position:absolute;background:#fff;border-radius:20px;opacity:.94;filter:drop-shadow(0 3px 3px rgba(40,80,120,.28));animation:drift linear infinite}
+.cloud::before,.cloud::after{content:"";position:absolute;background:#fff;border-radius:50%}
+.c1{width:130px;height:34px;top:13%;left:6%;animation-duration:70s}
+.c1::before{width:56px;height:56px;top:-30px;left:24px}
+.c1::after{width:40px;height:40px;top:-20px;left:76px}
+.c2{width:100px;height:28px;top:26%;left:20%;opacity:.82;animation-duration:95s;animation-delay:6s}
+.c2::before{width:44px;height:44px;top:-24px;left:20px}
+.c2::after{width:32px;height:32px;top:-16px;left:58px}
+.c3{width:150px;height:36px;top:7%;left:42%;opacity:.78;animation-duration:120s;animation-delay:12s}
+.c3::before{width:60px;height:60px;top:-32px;left:30px}
+.c3::after{width:44px;height:44px;top:-22px;left:88px}
+@keyframes drift{from{transform:translateX(-300px)}to{transform:translateX(calc(100vw + 300px))}}
+/* 漂浮的草方块（草皮+泥土+像素噪点） */
+.float-block{position:absolute;width:56px;height:56px;
+background:
+linear-gradient(90deg,rgba(0,0,0,.14) 25%,transparent 25%) 0 0/8px 8px,
+linear-gradient(90deg,transparent 25%,rgba(255,255,255,.10) 25%) 0 0/8px 8px,
+linear-gradient(180deg,#7fbd4f 0 15%,#6fae42 15% 21%,#8a6a3f 21% 100%);
+border:2px solid #24380f;box-shadow:inset -4px 0 0 rgba(0,0,0,.16),inset 4px 4px 0 rgba(255,255,255,.10),0 12px 22px rgba(0,0,0,.38);
+animation:floatY 5.5s ease-in-out infinite}
+@keyframes floatY{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-16px) rotate(4deg)}}
+.fb1{left:6%;top:22%;animation-delay:0s}
+.fb2{right:6%;top:30%;width:44px;height:44px;animation-delay:1.2s;animation-duration:6.5s}
+.fb3{left:4%;top:78%;width:60px;height:60px;animation-delay:.6s;animation-duration:4.8s;opacity:.88}
+/* 标题：MC 大 Logo + 金色光芒扫过 */
+#start h1.mc-title{position:relative;z-index:1;overflow:hidden;font-size:52px;letter-spacing:8px;margin-bottom:4px;padding:6px 22px;flex-shrink:0;animation:titleFloat 5s ease-in-out infinite}
+#start h1.mc-title>span{color:#fff;text-shadow:5px 5px 0 #3a3a3a,9px 9px 0 rgba(0,0,0,.3)}
+#start h1.mc-title::after{content:"";position:absolute;top:-15%;bottom:-15%;width:32%;left:-45%;transform:skewX(-14deg);
+background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,.55) 50%,transparent 100%);animation:shine 5.5s ease-in-out infinite}
+@keyframes shine{0%{left:-45%}55%,100%{left:135%}}
+@keyframes titleFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+#start .sub{color:#ff9;font-size:14px;text-shadow:2px 2px 0 #333;margin-bottom:18px;z-index:1;letter-spacing:1px}
+/* MC 灰石按钮（hover 变蓝，按下下沉） */
+.mcbtn{font-family:inherit;cursor:pointer;color:#fff;font-size:17px;padding:9px 24px;position:relative;z-index:1;margin-top:9px;
+min-width:240px;text-align:center;line-height:1.35;
+background:linear-gradient(180deg,#8d8d8d 0%,#7a7a7a 28%,#6f6f6f 62%,#636363 100%);
+border:2px solid #1c1c1c;text-shadow:2px 2px 0 #2a2a2a;
+box-shadow:inset 0 3px 0 rgba(255,255,255,.30),inset 0 -3px 0 rgba(0,0,0,.30),inset 3px 0 0 rgba(255,255,255,.12),inset -3px 0 0 rgba(0,0,0,.18),0 4px 0 #1c1c1c;
+transition:background .12s,filter .12s}
+.mcbtn:hover{background:linear-gradient(180deg,#4f8fcf 0%,#3f7fbf 30%,#3a76b4 70%,#326aa6 100%);box-shadow:inset 0 3px 0 rgba(255,255,255,.38),inset 0 -3px 0 rgba(0,0,0,.30),0 4px 0 #1c1c1c}
+.mcbtn:active{transform:translateY(3px);box-shadow:inset 0 3px 0 rgba(255,255,255,.25),inset 0 -3px 0 rgba(0,0,0,.32),0 1px 0 #1c1c1c}
+#skinRow .mcbtn,#modeRow .mcbtn{margin-top:0}
+.mcbtn-big{font-size:22px;padding:14px 28px;margin-top:12px;min-width:320px}
+.mcbtn-sm{padding:8px 18px;font-size:20px}
+.mcbtn-green{background:linear-gradient(180deg,#5fa84f,#4a8a3e)}
+.mcbtn-blue{background:linear-gradient(180deg,#4f7fbf,#3a62a6)}
+.mcbtn-red{background:linear-gradient(180deg,#b05454,#8a3a3a)}
+.mcbtn-orange{background:linear-gradient(180deg,#b07a3a,#8a5a2a)}
+.mcbtn-gray{background:linear-gradient(180deg,#6f6f6f,#565656)}
+/* 模式按钮：保留绿/蓝色辨识度，选中态白色光晕 */
+.modeBtn{font-size:17px;padding:10px 22px}
+#modeSurvival{background:linear-gradient(180deg,#5fa84f,#4a8a3e)}
+#modeCreative{background:linear-gradient(180deg,#4f7fbf,#3a62a6)}
+#modeSurvival:hover{background:linear-gradient(180deg,#6fc05f,#56a449)}
+#modeCreative:hover{background:linear-gradient(180deg,#5f8fcf,#4a72b6)}
+#modeSurvival.sel,#modeCreative.sel{border-color:#fff;box-shadow:inset 0 3px 0 rgba(255,255,255,.4),inset 0 -3px 0 rgba(0,0,0,.3),0 0 14px rgba(255,255,255,.55),0 4px 0 #1c1c1c}
+/* 皮肤展示框：MC 立体边框 */
+.mc-skin{border:3px solid #5a5a5a;box-shadow:inset 0 3px 0 rgba(255,255,255,.28),inset 0 -3px 0 rgba(0,0,0,.45),0 6px 14px rgba(0,0,0,.45)}
+/* 帮助面板：MC 半透明 GUI */
+.help{z-index:1;margin-top:14px;background:rgba(10,10,14,.66);border:2px solid rgba(255,255,255,.22);border-radius:6px;
+box-shadow:inset 0 2px 0 rgba(255,255,255,.14),inset 0 -3px 0 rgba(0,0,0,.45),0 8px 20px rgba(0,0,0,.5);
+color:#eee;padding:10px 18px;font-size:12px;line-height:1.6;max-width:640px}
+.help b{color:#ffd24a}
+.help .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;min-width:0}
+.help .cols>div{min-width:0}
+/* 全屏遮罩 + 弹窗（场景选择 / 存档目录）MC 风格 */
+.mc-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.82);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.mc-dialog{background:linear-gradient(180deg,#3a3a44,#2a2a32);border:3px solid #7a7a7a;border-radius:8px;padding:22px 26px;max-width:560px;width:92%;max-height:84vh;overflow-y:auto;
+box-shadow:inset 0 3px 0 rgba(255,255,255,.16),inset 0 -3px 0 rgba(0,0,0,.5),0 10px 30px rgba(0,0,0,.7)}
+/* ========== HUD ========== */
+#hud{position:fixed;inset:0;z-index:10;pointer-events:none}
+#crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;font-size:26px;text-shadow:1px 1px 2px #000;mix-blend-mode:difference}
+#minebar{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);width:110px;height:8px;background:rgba(0,0,0,.6);border:1px solid #222;display:none}
+#minefill{height:100%;width:0%;background:#ffd24a}
+#tasks{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.25);color:#fff;padding:8px 12px;font-size:13px;line-height:1.8;max-width:250px}
+#tasks .t-title{color:#ffd24a;font-weight:bold;margin-bottom:2px}
+#tasks .done{color:#7dff7d;text-decoration:line-through}
+#tasks .done::before{content:"✓ ";color:#3f3;font-weight:bold}
+#tasks .todo::before{content:"· ";color:#aaa}
+#bottomleft{position:absolute;left:50%;transform:translateX(-50%);bottom:64px;display:flex;flex-direction:column;gap:2px}
+#armorCv,#heartsCv{image-rendering:pixelated}
+#hotbar{position:absolute;left:50%;transform:translateX(-50%);bottom:8px;display:flex;pointer-events:auto}
+.slot{width:46px;height:46px;background:rgba(20,20,20,.55);border:2px solid #1a1a1a;box-shadow:inset 2px 2px 0 rgba(0,0,0,.6),inset -2px -2px 0 rgba(255,255,255,.25);
+position:relative;display:inline-flex;align-items:center;justify-content:center;margin:1px}
+.slot canvas{image-rendering:pixelated;width:34px;height:34px;pointer-events:none}
+.slot .cnt{position:absolute;right:2px;bottom:0;color:#fff;font-size:13px;font-weight:bold;text-shadow:1px 1px 0 #000;pointer-events:none}
+/* 附魔装备：紫色闪光扫过 */
+.slot{overflow:hidden}
+.slot.enchGlint{border-color:#a05ad0}
+.slot.enchGlint::after{content:'';position:absolute;inset:0;pointer-events:none;
+background:linear-gradient(115deg,transparent 20%,rgba(200,120,255,.55) 42%,rgba(255,200,255,.75) 50%,rgba(200,120,255,.55) 58%,transparent 80%);
+animation:enchSweep 1.6s linear infinite}
+@keyframes enchSweep{from{transform:translateX(-120%)}to{transform:translateX(120%)}}
+.slot.sel{border-color:#fff;box-shadow:inset 2px 2px 0 rgba(0,0,0,.6),inset -2px -2px 0 rgba(255,255,255,.6),0 0 8px #fff}
+.slot.armor-slot .ph{color:#666;font-size:18px;pointer-events:none}
+/* ========== 面板 ========== */
+.panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:50;background:#c6c6c6;border:3px solid #1a1a1a;
+box-shadow:inset 3px 3px 0 #fff,inset -3px -3px 0 #777,0 10px 40px rgba(0,0,0,.7);padding:14px;color:#222;max-height:92vh;overflow:auto}
+.panel h3{font-size:15px;margin-bottom:4px;color:#333}
+.panel .hint{font-size:11px;color:#777;margin-bottom:8px}
+.panel .closeX{position:absolute;right:6px;top:4px;font-size:20px;font-weight:bold;cursor:pointer;color:#a00;background:none;border:none;font-family:inherit}
+.prow{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+.pcol{display:flex;flex-direction:column;gap:4px;align-items:center}
+.plabel{font-size:11px;color:#555;margin-top:2px}
+.grid{display:grid;gap:2px}
+.g9{grid-template-columns:repeat(9,46px)}
+.g3{grid-template-columns:repeat(3,46px)}
+.g2{grid-template-columns:repeat(2,46px)}
+.craftrow{display:flex;align-items:center;gap:10px}
+#dollCv,#dollCv2{image-rendering:pixelated;background:#9a9a9a;border:2px solid #555}
+#craftArrow,#furnArrow{font-size:24px;color:#333}
+#furnProgWrap{width:24px;height:40px;background:#777;border:1px solid #333;position:relative}
+#furnProg{position:absolute;bottom:0;left:0;width:100%;height:0%;background:linear-gradient(180deg,#ff8000,#ffd24a)}
+#furnFire{font-size:20px;text-align:center}
+/* ========== 触屏 ========== */
+#touch{position:fixed;inset:0;z-index:20;pointer-events:none}
+#joy{position:absolute;left:26px;bottom:70px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);pointer-events:auto}
+#knob{position:absolute;left:50%;top:50%;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.4);border:2px solid rgba(255,255,255,.6);transform:translate(-50%,-50%)}
+#btns{position:absolute;right:16px;bottom:60px;display:flex;flex-direction:column;gap:12px;pointer-events:auto}
+.tbtn{width:66px;height:66px;border-radius:50%;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.5);color:#fff;
+display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;pointer-events:auto;text-shadow:1px 1px 2px #000}
+.tbtn:active{background:rgba(255,255,255,.35)}
+#btnInv{position:absolute;right:16px;top:14px;border-radius:12px;width:66px;height:44px}
+/* ========== 其它 ========== */
+#cursor{position:fixed;z-index:80;pointer-events:none;display:flex;align-items:center}
+#cursor canvas{image-rendering:pixelated;width:34px;height:34px}
+#cursor span{color:#fff;font-size:13px;font-weight:bold;text-shadow:1px 1px 0 #000;margin-left:-10px;margin-top:16px}
+#toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:60;color:#ffd24a;font-size:16px;text-shadow:1px 1px 0 #000;
+background:rgba(0,0,0,.5);padding:6px 14px;border-radius:4px;opacity:0;transition:opacity .3s;pointer-events:none}
+#flash{position:fixed;inset:0;z-index:40;background:#f00;opacity:0;pointer-events:none;transition:opacity .25s}
+.overlay-full{position:fixed;inset:0;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.72);color:#fff}
+.overlay-full h2{font-size:42px;margin-bottom:18px;text-shadow:3px 3px 0 #000}
+.overlay-full button{font-family:inherit;font-size:20px;padding:12px 40px;cursor:pointer;color:#fff;background:#5a5a5a;border:3px solid #222;text-shadow:1px 1px 0 #000}
+.overlay-full p{margin:6px 0;color:#ccc;font-size:14px;line-height:1.7;max-width:520px;text-align:center}
+/* ========== iPad/触屏优化 ========== */
+body.touch-mode .slot{width:58px;height:58px}
+body.touch-mode .slot canvas{width:44px;height:44px}
+body.touch-mode .slot .cnt{font-size:15px}
+body.touch-mode .g9{grid-template-columns:repeat(9,58px)}
+body.touch-mode .g3{grid-template-columns:repeat(3,58px)}
+body.touch-mode .g2{grid-template-columns:repeat(2,58px)}
+body.touch-mode .tbtn{width:76px;height:76px;font-size:18px}
+body.touch-mode #btnInv{width:84px;height:54px;font-size:18px;border-radius:14px}
+body.touch-mode #hotbar{bottom:14px}
+body.touch-mode #tasks{max-width:200px;font-size:12px}
+body.touch-mode .panel{padding:18px 16px}
+/* 配方图鉴 */
+#btnBook{position:absolute;right:112px;top:14px;border-radius:12px;width:66px;height:44px}
+body.touch-mode #btnBook{width:66px;height:54px;right:120px;font-size:22px}
+#btnBookHud{position:absolute;right:14px;top:14px;pointer-events:auto;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.5);
+color:#fff;padding:8px 14px;border-radius:12px;font-size:16px;font-weight:bold;text-shadow:1px 1px 2px #000;cursor:pointer}
+#bookPanel{width:min(680px,94vw)}
+#bookList{display:flex;flex-direction:column;gap:6px}
+.bk-group{margin-top:8px;font-weight:bold;color:#5a3a00;font-size:14px;border-bottom:2px solid #999;padding-bottom:2px}
+.bk-row{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.35);border:1px solid #999;padding:5px 8px;border-radius:4px}
+.bk-pat{display:grid;gap:1px}
+.bk-cell{width:24px;height:24px;background:rgba(0,0,0,.12);border:1px solid #888;display:flex;align-items:center;justify-content:center}
+.bk-cell canvas{image-rendering:pixelated;width:20px;height:20px}
+.bk-ing{display:flex;align-items:center;gap:2px;flex-wrap:wrap;max-width:250px}
+.bk-ing .bk-cell{width:28px;height:28px}
+.bk-ing .bk-cell canvas{width:22px;height:22px}
+.bk-ing .n{font-size:12px;font-weight:bold;margin-right:5px}
+.bk-arrow{font-size:18px;color:#333}
+.bk-out{display:flex;align-items:center;gap:6px}
+.bk-out .bk-cell{width:32px;height:32px;background:rgba(0,0,0,.18)}
+.bk-out .bk-cell canvas{width:26px;height:26px}
+.bk-name{font-size:13px;color:#222;line-height:1.4}
+.bk-name b{font-size:14px}
+.bk-mat{color:#666;font-size:11px}
+@media (max-width:820px){#tasks{max-width:170px;font-size:11px}}

@@ -1,0 +1,955 @@
+// ---------------- 玩家 ----------------
+const PW=0.3,PH=1.8,PEYE=1.62;
+const player={
+  pos:new THREE.Vector3(48.5,40,48.5),
+  vel:new THREE.Vector3(),
+  yaw:0,pitch:0,onGround:false,
+  hp:20,maxHp:20,peakY:40,
+  inWater:false,headWater:false,
+  lastDamage:-99,dead:false,
+  mounted:null, // 骑乘中的快乐恶魂
+  sel:0,heldId:B_GRASS
+};
+let spawnPoint=new THREE.Vector3(48.5,40,48.5);
+
+function playerAABB(pos){
+  return {x0:pos.x-PW,y0:pos.y,z0:pos.z-PW,x1:pos.x+PW,y1:pos.y+PH,z1:pos.z+PW};
+}
+function boxCollides(pos){
+  const a=playerAABB(pos);
+  const x0=Math.floor(a.x0),x1=Math.floor(a.x1-0.0001);
+  const y0=Math.floor(a.y0),y1=Math.floor(a.y1-0.0001);
+  const z0=Math.floor(a.z0),z1=Math.floor(a.z1-0.0001);
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++)for(let z=z0;z<=z1;z++){
+    if(y<0)return true;
+    if(isSolidBlock(getBlock(x,y,z)))return true;
+  }
+  return false;
+}
+function moveAxis(axis,amt){
+  if(amt===0)return;
+  const p=player.pos.clone();
+  p[axis]+=amt;
+  if(!boxCollides(p)){player.pos[axis]=amt+player.pos[axis];return;}
+  // 二分逼近
+  let lo=0,hi=amt;
+  for(let i=0;i<8;i++){
+    const mid=(lo+hi)/2;
+    const q=player.pos.clone();q[axis]+=mid;
+    if(boxCollides(q))hi=mid;else lo=mid;
+  }
+  player.pos[axis]+=lo;
+  if(axis==='y'){
+    if(amt<0)player.onGround=true;
+    player.vel.y=0;
+  }else player.vel[axis]=0;
+}
+function checkWater(){
+  const fx=Math.floor(player.pos.x),fy=Math.floor(player.pos.y),fz=Math.floor(player.pos.z);
+  const hy=Math.floor(player.pos.y+PEYE);
+  const isLiq=b=>b===B_WATER||b===B_LAVA; // 岩浆里也能扑腾（但会烫伤）
+  player.inWater=isLiq(getBlock(fx,fy,fz))||isLiq(getBlock(fx,fy+1,fz));
+  player.headWater=isLiq(getBlock(fx,hy,fz));
+}
+function physicsStep(dt,input){
+  checkWater();
+  // 输入方向
+  let fx=input.f,rz=input.r;
+  const len=Math.hypot(fx,rz);
+  if(len>1){fx/=len;rz/=len;}
+  const sin=Math.sin(player.yaw),cos=Math.cos(player.yaw);
+  // 前向 = (-sin, -cos) (yaw=0 朝 -z)
+  const dirX=fx*(-sin)+rz*(cos);
+  const dirZ=fx*(-cos)+rz*(-sin);
+  const speed=player.inWater?3.0:(input.sprint?6.5:4.3);
+  const ctrl=player.onGround||player.inWater?1:0.35;
+  player.vel.x=lerp(player.vel.x,dirX*speed,clamp(ctrl*dt*12,0,1));
+  player.vel.z=lerp(player.vel.z,dirZ*speed,clamp(ctrl*dt*12,0,1));
+  // 重力/跳跃
+  if(gameMode==='creative'){
+    // 创造模式：飞行（跳跃=上升，Shift/下降键=下降，否则悬停）
+    const flySp=input.sprint?11:6.5;
+    const vy=input.jump?flySp:(flyDown?-flySp:0);
+    player.vel.y=lerp(player.vel.y,vy,clamp(dt*10,0,1));
+    player.peakY=player.pos.y; // 飞行不产生摔落伤害
+  }else if(player.inWater){
+    player.vel.y+=-25*0.18*dt;
+    if(input.jump)player.vel.y=Math.min(player.vel.y+60*dt,3.6);
+    player.vel.y=clamp(player.vel.y,-3.5,4);
+  }else{
+    player.vel.y-=25*dt;
+    player.vel.y=Math.max(player.vel.y,-40);
+    if(input.jump&&player.onGround){player.vel.y=8.4;player.onGround=false;}
+  }
+  const wasGround=player.onGround;
+  player.onGround=false;
+  moveAxis('x',player.vel.x*dt);
+  moveAxis('z',player.vel.z*dt);
+  moveAxis('y',player.vel.y*dt);
+  // 掉落追踪
+  if(!player.onGround){
+    if(player.pos.y>player.peakY)player.peakY=player.pos.y;
+  }else if(!wasGround){
+    const dist=player.peakY-player.pos.y;
+    if(dist>4&&player.vel.y<=0.01){
+      const armor=totalArmor();
+      let dmg=Math.floor(dist-3);
+      dmg=Math.max(0,Math.round(dmg*(1-Math.min(armor*0.04,0.8))));
+      if(dmg>0)damagePlayer(dmg,'从高处摔落');
+    }
+    player.peakY=player.pos.y;
+  }
+  if(player.onGround)player.peakY=player.pos.y;
+  // 掉出世界
+  if(player.pos.y<-10)damagePlayer(100,'掉出了世界');
+  // 缓慢回血
+  if(player.hp<player.maxHp&&performance.now()/1000-player.lastDamage>5){
+    player.regenT=(player.regenT||0)+dt;
+    if(player.regenT>2){player.regenT=0;player.hp=Math.min(player.maxHp,player.hp+1);updateHearts();}
+  }
+}
+function totalArmor(){
+  let s=0;
+  for(const a of inv.armor)if(a)s+=ITEMS[a.id].armorPts+(a.ench?(a.ench.prot||0):0);
+  return s;
+}
+function damagePlayer(dmg,reason){
+  if(player.dead)return;
+  if(gameMode==='creative')return; // 创造模式不掉血
+  if(gameMode==='shooter'&&SHOOTER.spawnProtectT>0){showToast('🛡 出生保护中，免疫伤害！');return;} // 出生保护免伤
+  player.hp-=dmg;
+  player.lastDamage=performance.now()/1000;
+  sfx.hurt();
+  flashScreen();
+  // 被击方第一视角：血雾从身上喷出（红色）
+  spawnBlood(player.pos.x,player.pos.y+1,player.pos.z);
+  updateHearts();
+  if(player.hp<=0){
+    player.hp=0;player.dead=true;
+    spawnBlood(player.pos.x,player.pos.y+1,player.pos.z); // 击杀瞬间大血雾
+    spawnBlood(player.pos.x,player.pos.y+1.4,player.pos.z);
+    if(gameMode==='shooter'){
+      // 枪战模式：不走死亡界面，广播击杀并自动重生
+      const aid=(reason&&reason.aid)?reason.aid:null;
+      if(NET.open&&NET.roomId){
+        netBroadcast({t:'kill',k:aid||'0',v:NET.myId,kn:reason?reason.attacker:'',vn:NET.myName,wn:reason?reason.wn:''});
+        netBroadcast({t:'pvpdead',target:NET.myId,alive:false}); // 队友视角：头像消失
+        shooterKill(aid||'0',NET.myId,reason?reason.attacker:'',NET.myName,reason?reason.wn:''); // 本地也计分（攻击者+1）
+      }
+      else shooterKill(aid||'1',NET.myId,reason?reason.attacker:'',NET.myName,reason?reason.wn:'');
+      setTimeout(()=>{if(gameMode==='shooter'&&player.dead)shooterRespawn();},1400);
+      return;
+    }
+    document.getElementById('deathMsg').textContent=reason&&reason.text?reason.text:'';
+    show('death');
+    unlockPointer();
+    if(NET.open&&NET.roomId)netBroadcast({t:'pvpdead',target:NET.myId,alive:false}); // 通知其他人：我死了
+  }
+}
+function flashScreen(){
+  const f=document.getElementById('flash');
+  f.style.opacity=0.35;
+  setTimeout(()=>{f.style.opacity=0;},120);
+}
+
+// ---------------- 输入 ----------------
+const isTouch=('ontouchstart'in window)||(navigator.maxTouchPoints>0)||location.search.indexOf('touch=1')>=0;
+if(isTouch)document.body.classList.add('touch-mode');
+let gameState='start'; // start|playing|dead
+const keys={};
+const input={f:0,r:0,jump:false,sprint:false};
+let mining=false;
+let pointerLocked=false;
+function $(id){return document.getElementById(id);}
+function show(id){$(id).classList.remove('hidden');}
+function hide(id){$(id).classList.add('hidden');}
+function anyPanelOpen(){return !$('invPanel').classList.contains('hidden')||!$('tablePanel').classList.contains('hidden')||!$('furnacePanel').classList.contains('hidden')||!$('bookPanel').classList.contains('hidden')||!$('mpPanel').classList.contains('hidden')||!$('cmdPanel').classList.contains('hidden')||!$('chestPanel').classList.contains('hidden')||!$('enchPanel').classList.contains('hidden');}
+function inputEnabled(){return gameState==='playing'&&!player.dead&&!anyPanelOpen();}
+function lockPointer(){if(isTouch)return;const c=renderer.domElement;if(c.requestPointerLock)c.requestPointerLock();}
+function unlockPointer(){if(document.exitPointerLock&&document.pointerLockElement)document.exitPointerLock();}
+
+function initControls(){
+  initHandView(); // 第一人称手持武器
+  window.addEventListener('keydown',e=>{
+    if(e.repeat)return;
+    if(e.target&&e.target.tagName==='INPUT'&&e.code!=='Enter'&&e.code!=='Escape')return; // 在输入框里打字不触发游戏按键
+    keys[e.code]=true;
+    if(gameState!=='playing')return;
+    if(e.code==='KeyE'){
+      if(anyPanelOpen())closeAllPanels();
+      else openInventory();
+      e.preventDefault();
+    }
+    if(e.code==='KeyB'){
+      if(anyPanelOpen())closeAllPanels();
+      else openBook();
+      e.preventDefault();
+    }
+    if(e.code==='Slash'){
+      if(anyPanelOpen())closeAllPanels();
+      else openCmd();
+      e.preventDefault();
+    }
+    if(e.code==='KeyT'){
+      // T 键：唤起/隐藏左侧任务面板
+      if(anyPanelOpen())closeAllPanels();
+      toggleTasks();
+      e.preventDefault();
+    }
+    if(e.code.indexOf('Digit')===0){
+      const n=+e.code.slice(5);
+      if(n>=1&&n<=9){player.sel=n-1;sfx.select();updateHotbar();}
+    }
+  });
+  window.addEventListener('keyup',e=>{
+    keys[e.code]=false;
+    if(e.code==='KeyG'&&gameMode==='shooter'&&typeof releaseNadeCharge==='function')releaseNadeCharge();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!pointerLocked||!inputEnabled())return;
+    player.yaw-=e.movementX*0.0022;
+    player.pitch-=e.movementY*0.0022;
+    player.pitch=clamp(player.pitch,-1.55,1.55);
+  });
+  document.addEventListener('mousedown',e=>{
+    if(gameState!=='playing'||!pointerLocked||anyPanelOpen()||player.dead)return;
+    if(e.button===0){if(heldItemId()===I.bread){eatBread();}else{mining=true;tryAttackMob();}}
+    else if(e.button===2){
+      // 枪战：手持手榴弹->按住蓄力；手持地雷->布雷；否则原放置/投掷逻辑
+      if(gameMode==='shooter'){
+        const held=heldItemId();
+        if(held&&ITEMS[held]&&ITEMS[held].type==='grenade'){startNadeCharge();return;}
+      }
+      interactOrPlace();
+    }
+  });
+  document.addEventListener('mouseup',e=>{
+    if(e.button===0)mining=false;
+    if(e.button===2&&typeof releaseNadeCharge==='function')releaseNadeCharge();
+  });
+  document.addEventListener('contextmenu',e=>e.preventDefault());
+  document.addEventListener('wheel',e=>{
+    if(gameState!=='playing'||anyPanelOpen())return;
+    player.sel=(player.sel+(e.deltaY>0?1:-1)+9)%9;
+    sfx.select();updateHotbar();
+  },{passive:true});
+  document.addEventListener('pointerlockchange',()=>{
+    pointerLocked=document.pointerLockElement===renderer.domElement;
+    if(!pointerLocked&&gameState==='playing'&&!anyPanelOpen()&&!player.dead&&!isTouch){
+      show('pause');
+    }else{
+      hide('pause');
+    }
+  });
+  $('resumeBtn').addEventListener('click',()=>{hide('pause');lockPointer();});
+  $('respawnBtn').addEventListener('click',respawn);
+  if(isTouch)initTouch();
+}
+function respawn(){
+  player.dead=false;player.hp=player.maxHp;
+  player.pos.copy(spawnPoint);player.vel.set(0,0,0);player.peakY=player.pos.y;player.mounted=null;
+  hide('death');updateHearts();
+  if(!isTouch)lockPointer();
+  if(NET.open&&NET.roomId)netBroadcast({t:'pvpdead',target:NET.myId,alive:true}); // 通知其他人：我复活了
+}
+
+// ---------------- 触屏 ----------------
+const joy={active:false,id:-1,x:0,y:0};
+const look={active:false,id:-1,lx:0,ly:0};
+function initTouch(){
+  const joyEl=$('joy'),knob=$('knob');
+  joyEl.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    const t=e.changedTouches[0];
+    joy.active=true;joy.id=t.identifier;
+    moveKnob(t);
+  },{passive:false});
+  window.addEventListener('touchmove',e=>{
+    for(const t of e.changedTouches){
+      if(joy.active&&t.identifier===joy.id){moveKnob(t);e.preventDefault();}
+      if(look.active&&t.identifier===look.id){
+        const dx=t.clientX-look.lx,dy=t.clientY-look.ly;
+        look.lx=t.clientX;look.ly=t.clientY;
+        if(inputEnabled()){
+          player.yaw-=dx*0.0042;
+          player.pitch=clamp(player.pitch-dy*0.0042,-1.55,1.55);
+        }
+      }
+    }
+  },{passive:false});
+  window.addEventListener('touchend',e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===joy.id){joy.active=false;joy.id=-1;joy.x=0;joy.y=0;knob.style.transform='translate(-50%,-50%)';}
+      if(t.identifier===look.id){look.active=false;look.id=-1;}
+    }
+  });
+  window.addEventListener('touchcancel',e=>{
+    joy.active=false;joy.id=-1;joy.x=0;joy.y=0;look.active=false;look.id=-1;
+    knob.style.transform='translate(-50%,-50%)';
+  });
+  function moveKnob(t){
+    const r=joyEl.getBoundingClientRect();
+    let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height/2);
+    const max=r.width/2;
+    const len=Math.hypot(dx,dy);
+    if(len>max){dx*=max/len;dy*=max/len;}
+    knob.style.transform='translate(calc(-50% + '+dx+'px),calc(-50% + '+dy+'px))';
+    joy.x=dx/max;joy.y=dy/max;
+  }
+  // 视角拖动(右半屏空白处)
+  document.addEventListener('touchstart',e=>{
+    if(gameState!=='playing')return;
+    for(const t of e.changedTouches){
+      if(t.clientX<window.innerWidth*0.35)continue;
+      const el=document.elementFromPoint(t.clientX,t.clientY);
+      if(el&&el.closest('.tbtn,#joy,.panel,#hotbar,#startBtn,.overlay-full'))continue;
+      if(look.active)continue;
+      look.active=true;look.id=t.identifier;look.lx=t.clientX;look.ly=t.clientY;
+    }
+  },{passive:true});
+  function bindBtn(id){
+    const el=$(id);
+    el.addEventListener('touchstart',e=>{
+      e.preventDefault();e.stopPropagation();
+      if(id==='btnJump')jumpBtn=true;
+      else if(id==='btnFlyDown')flyDownBtn=true;
+      else if(id==='btnMine'){if(heldItemId()===I.bread){eatBread();}else{mining=true;tryAttackMob();}}
+      else if(id==='btnPlace'){
+        // 触屏：手持手榴弹->按住蓄力，否则原放置逻辑
+        if(gameMode==='shooter'&&heldItemId()&&ITEMS[heldItemId()]&&ITEMS[heldItemId()].type==='grenade'){startNadeCharge();return;}
+        interactOrPlace();
+      }
+      else if(id==='btnInv'){if(anyPanelOpen())closeAllPanels();else openInventory();}
+    },{passive:false});
+    el.addEventListener('touchend',e=>{
+      e.preventDefault();
+      if(id==='btnPlace'&&typeof releaseNadeCharge==='function')releaseNadeCharge();
+      if(id==='btnJump')jumpBtn=false;
+      else if(id==='btnFlyDown')flyDownBtn=false;
+      else if(id==='btnMine')mining=false;
+    },{passive:false});
+  }
+  bindBtn('btnJump');bindBtn('btnFlyDown');bindBtn('btnMine');bindBtn('btnPlace');bindBtn('btnInv');
+  const bb=$('btnBook');
+  if(bb)bb.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();
+    if(anyPanelOpen())closeAllPanels();else openBook();},{passive:false});
+  // 快捷栏点选
+  $('hotbar').addEventListener('touchstart',e=>{
+    const el=e.target.closest('.slot');
+    if(!el)return;
+    e.preventDefault();
+    player.sel=+el.dataset.idx;sfx.select();updateHotbar();
+  },{passive:false});
+}
+
+// ---------------- 射线检测 ----------------
+function raycastVoxel(maxDist){
+  const origin=new THREE.Vector3(player.pos.x,player.pos.y+PEYE,player.pos.z);
+  const dir=new THREE.Vector3(
+    -Math.sin(player.yaw)*Math.cos(player.pitch),
+    Math.sin(player.pitch),
+    -Math.cos(player.yaw)*Math.cos(player.pitch)).normalize();
+  let x=Math.floor(origin.x),y=Math.floor(origin.y),z=Math.floor(origin.z);
+  const stepX=dir.x>0?1:-1,stepY=dir.y>0?1:-1,stepZ=dir.z>0?1:-1;
+  const tdx=Math.abs(1/(dir.x||1e-10)),tdy=Math.abs(1/(dir.y||1e-10)),tdz=Math.abs(1/(dir.z||1e-10));
+  let tmx=(stepX>0?(x+1-origin.x):(origin.x-x))*tdx;
+  let tmy=(stepY>0?(y+1-origin.y):(origin.y-y))*tdy;
+  let tmz=(stepZ>0?(z+1-origin.z):(origin.z-z))*tdz;
+  let nx=0,ny=0,nz=0,t=0;
+  for(let i=0;i<200;i++){
+    if(tmx<tmy&&tmx<tmz){x+=stepX;t=tmx;tmx+=tdx;nx=-stepX;ny=0;nz=0;}
+    else if(tmy<tmz){y+=stepY;t=tmy;tmy+=tdy;nx=0;ny=-stepY;nz=0;}
+    else{z+=stepZ;t=tmz;tmz+=tdz;nx=0;ny=0;nz=-stepZ;}
+    if(t>maxDist)return null;
+    const b=getBlock(x,y,z);
+    if(b!==B_AIR&&(BLOCKS[b].solid||b===B_DOOR_OPEN||b===B_CROPS)){ // 开着的门和麦苗也要能点到
+      return {x,y,z,nx,ny,nz,dist:t,block:b};
+    }
+  }
+  return null;
+}
+
+// ---------------- 挖掘/放置 ----------------
+let mineTarget=null,mineProgress=0,mineTickT=0;
+let curTarget=null;
+function heldItemId(){
+  const s=inv.hot[player.sel];
+  return s?s.id:0;
+}
+// ---------------- 第一人称手持武器（手 + 不同武器 3D 模型） ----------------
+let handGroup=null,handWeapon=null,handRecoil=0,handBobT=0,handMoving=false;
+const HAND_POS={x:0.36,y:-0.30,z:-0.62}; // 相机空间：画面右下角
+function initHandView(){
+  if(handGroup||!camera)return;
+  handGroup=new THREE.Group();
+  // 手臂（肤色）从画面底角伸向武器
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.27,0.085),new THREE.MeshLambertMaterial({color:0xd8a06a}));
+  arm.position.set(0,-0.07,-0.02);
+  handGroup.add(arm);
+  // 手掌
+  const palm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.09,0.07),new THREE.MeshLambertMaterial({color:0xd8a06a}));
+  palm.position.set(0,0.06,-0.12);
+  handGroup.add(palm);
+  handWeapon=new THREE.Group();
+  handWeapon.position.set(0,0.08,-0.16);
+  handGroup.add(handWeapon);
+  camera.add(handGroup);
+  handGroup.position.copy(HAND_POS);
+  showHeldItem();
+}
+// 构建各武器 3D 模型（挂在 handWeapon 下，指向 -Z 视线方向）
+function buildWeaponModel(id){
+  const g=new THREE.Group();
+  const M=(c,r)=>new THREE.MeshLambertMaterial({color:c});
+  const dark=M(0x2e2e2e),grey=M(0x555555),wood=M(0x8a5a2a),darkwood=M(0x5e3a1a);
+  const box=(w,h,d,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);g.add(m);return m;};
+  const cyl=(r,h,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),mat);m.rotation.x=Math.PI/2;m.position.set(x,y,z);g.add(m);return m;};
+  const it=id?ITEMS[id]:null;const type=it?it.type:null;
+  if(type==='gun'){
+    const gn=it.gun||{};
+    if(gn.dmg>=25){ // 狙击枪：长枪管 + 瞄准镜 + 木托
+      box(0.06,0.09,0.42,grey,0,0,-0.21); // 枪身
+      cyl(0.028,0.55,dark,0,0.015,-0.52); // 长枪管
+      cyl(0.036,0.10,dark,0,0.09,-0.16); // 瞄准镜
+      box(0.07,0.1,0.16,wood,0,-0.02,0.12); // 枪托
+    }else if(gn.pellets){ // 霰弹枪：双管 + 木托
+      cyl(0.03,0.5,dark,-0.022,0.01,-0.28);
+      cyl(0.03,0.5,dark,0.022,0.01,-0.28);
+      box(0.08,0.09,0.2,wood,0,0.01,-0.02); // 枪身木
+      box(0.07,0.1,0.16,darkwood,0,-0.02,0.14); // 枪托
+    }else if(gn.cd<=0.14){ // 冲锋枪：短枪身 + 下挂弹匣
+      box(0.08,0.1,0.34,dark,0,0,-0.16); // 枪身
+      box(0.06,0.14,0.05,dark,0,-0.11,-0.14); // 弹匣
+      cyl(0.025,0.2,dark,0,0.015,-0.4); // 枪管
+      box(0.04,0.03,0.06,wood,0,-0.02,0.12); // 握把小
+    }else{ // 手枪：短管 + 握把 + 准星
+      box(0.07,0.1,0.24,grey,0,0.01,-0.1); // 滑套
+      cyl(0.022,0.14,dark,0,0.03,-0.26); // 枪管
+      box(0.06,0.16,0.06,dark,0,-0.12,-0.02); // 握把
+      box(0.02,0.03,0.02,dark,0,0.09,-0.2); // 准星
+    }
+  }else if(type==='grenade'){
+    const ball=new THREE.Mesh(new THREE.SphereGeometry(0.09,10,10),M(0x4a7a3a));
+    ball.position.set(0,0,-0.04);g.add(ball);
+    const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.08,6),M(0x8a8a8a));
+    pin.position.set(0,0.06,-0.04);g.add(pin);
+  }else if(type==='mine'){
+    const disc=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.12,0.045,10),M(0x3a5a2a));
+    disc.position.set(0,0,-0.03);g.add(disc);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.025,6,6),M(0xff3030));
+    lamp.position.set(0,0.02,-0.03);g.add(lamp);
+  }else if(type==='block'){ // 掩体方块：圆石色方块
+    const blk=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.16),new THREE.MeshLambertMaterial({color:0x8a8a7a}));
+    blk.position.set(0,0.02,-0.1);g.add(blk);
+  }else if(id&&id!==I.bow){ // 其他物品：手拿一个小方块示意
+    const blk=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.13),new THREE.MeshLambertMaterial({color:0x7a5ac2}));
+    blk.position.set(0,0.02,-0.1);g.add(blk);
+  }
+  // 弓：木弯弓（弧）
+  else if(id===I.bow){
+    const bow=new THREE.Mesh(new THREE.TorusGeometry(0.11,0.018,6,14,Math.PI),M(0x8a5a2a));
+    bow.position.set(0,0.04,-0.08);bow.rotation.x=Math.PI/2;g.add(bow);
+    const str=new THREE.Mesh(new THREE.BoxGeometry(0.005,0.005,0.22),M(0xcccccc));
+    str.position.set(0,0.04,-0.08);g.add(str);
+  }
+  return g;
+}
+function showHeldItem(){
+  if(!handGroup)return;
+  while(handWeapon.children.length)handWeapon.remove(handWeapon.children[0]);
+  const held=heldItemId();
+  const wm=buildWeaponModel(held);
+  handWeapon.add(wm);
+  // 面板/死亡隐藏
+  const hide=!started||(typeof anyPanelOpen==='function'&&anyPanelOpen())||player.dead;
+  handGroup.visible=!hide;
+}
+function handRecoilPulse(){handRecoil=0.09;}
+function updateHandView(dt){
+  if(!handGroup)return;
+  // 隐藏条件
+  const hide=!started||(typeof anyPanelOpen==='function'&&anyPanelOpen())||player.dead;
+  if(hide){handGroup.visible=false;return;}
+  handGroup.visible=true;
+  // 走路摆动 + 后坐恢复
+  handRecoil=Math.max(0,handRecoil-dt*0.5);
+  const move=keys&&(keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD'])&&!player.dead;
+  handBobT+=dt*(move?9:3);
+  const bob=Math.sin(handBobT)*(move?0.016:0.004);
+  handGroup.position.set(HAND_POS.x+Math.sin(handBobT*0.5)*0.012,HAND_POS.y+bob,HAND_POS.z+handRecoil);
+  // 后坐时武器轻微上仰
+  handWeapon.rotation.x=handRecoil*0.8;
+}
+
+function breakTimeFor(b,held){
+  const def=BLOCKS[b];
+  if(!isFinite(def.hard))return Infinity;
+  const it=held?ITEMS[held]:null;
+  if(it&&it.type==='tool'&&def.tool&&it.toolType===def.tool&&it.tier>=def.minTier){
+    const st=inv.hot[player.sel];
+    const eff=st&&st.id===held&&st.ench?(st.ench.eff||0):0;
+    return Math.max(def.hard/(it.speed*(1+0.5*eff)),0.05);
+  }
+  if(def.tool&&def.minTier>0)return def.hard*1.6;
+  return Math.max(def.hard,0.05);
+}
+function canHarvest(b,held){
+  const def=BLOCKS[b];
+  if(!def.tool||def.minTier===0)return true;
+  const it=held?ITEMS[held]:null;
+  return !!(it&&it.type==='tool'&&it.toolType===def.tool&&it.tier>=def.minTier);
+}
+function updateMining(dt){
+  curTarget=inputEnabled()?raycastVoxel(5.2):null;
+  if(curTarget){
+    highlightBox.visible=true;
+    highlightBox.position.set(curTarget.x+0.5,curTarget.y+0.5,curTarget.z+0.5);
+  }else highlightBox.visible=false;
+  const bar=$('minebar');
+  // 枪战模式：只允许挖玩家放置/改动过的方块（掩体等，blockDiff 有记录），竞技场原生方块保护
+  const t0=curTarget;
+  const playerChanged=t0&&blockDiff[t0.x+','+t0.y+','+t0.z]!==undefined;
+  if((gameMode==='shooter'&&!playerChanged)||!mining||!curTarget||!inputEnabled()||mobRaycast()){
+    mineProgress=0;mineTarget=null;bar.style.display='none';
+    return;
+  }
+  const t=curTarget;
+  if(!mineTarget||mineTarget.x!==t.x||mineTarget.y!==t.y||mineTarget.z!==t.z){
+    mineTarget={x:t.x,y:t.y,z:t.z};mineProgress=0;
+  }
+  let bt=breakTimeFor(t.block,heldItemId());
+  if(gameMode==='creative')bt=0.05; // 创造模式秒挖
+  if(gameMode==='shooter')bt=Math.min(bt,0.6); // 枪战：挖掩体加速（徒手/持枪 0.6s 内挖掉）
+  if(!isFinite(bt)){bar.style.display='none';return;}
+  mineProgress+=dt/bt;
+  mineTickT+=dt;
+  if(mineTickT>0.22){mineTickT=0;sfx.digTick(BLOCKS[t.block].sound);}
+  bar.style.display='block';
+  $('minefill').style.width=Math.min(100,mineProgress*100)+'%';
+  if(mineProgress>=1){
+    breakBlock(t.x,t.y,t.z,t.block);
+    mineProgress=0;mineTarget=null;bar.style.display='none';
+  }
+}
+function breakBlock(x,y,z,b){
+  const held=heldItemId();
+  // 枪战模式：挖掩体只清方块，不掉落物（防背包污染）
+  if(gameMode==='shooter'){
+    setBlock(x,y,z,B_AIR);
+    spawnBlockParticles(x,y,z,tileColors[BLOCKS[b].tiles.side]);
+    sfx.breakBlock(BLOCKS[b].sound);
+    onWorldChanged();
+    return;
+  }
+  const cropStage=(b===B_CROPS)?(facings[x+','+y+','+z]||0):0; // setBlock 会清掉 facings，先记住生长阶段
+  setBlock(x,y,z,B_AIR);
+  // 门是上下两格，敲一格另一格也消失
+  if(b===B_DOOR||b===B_DOOR_OPEN){
+    const isDoor=v=>v===B_DOOR||v===B_DOOR_OPEN;
+    if(isDoor(getBlock(x,y+1,z)))setBlock(x,y+1,z,B_AIR);
+    if(isDoor(getBlock(x,y-1,z)))setBlock(x,y-1,z,B_AIR);
+  }
+  // 床是左右两格，敲一格另一格也消失（敲床头时床尾掉出床物品）
+  if(b===B_BED||b===B_BED_HEAD){
+    for(const bd of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+bd[0],nz=z+bd[1];
+      const nb=getBlock(nx,y,nz);
+      if(b===B_BED&&nb===B_BED_HEAD)setBlock(nx,y,nz,B_AIR);
+      if(b===B_BED_HEAD&&nb===B_BED){setBlock(nx,y,nz,B_AIR);if(canHarvest(B_BED,held))spawnDrop(nx+0.5,y+0.5,nz+0.5,B_BED,1);}
+    }
+  }
+  // 箱子被打掉：里面的东西全部掉出来
+  if(b===B_CHEST){
+    const key=x+','+y+','+z;
+    const cs=chestStates[key];
+    if(cs)for(const s of cs.slots)if(s)spawnDrop(x+0.5,y+0.5,z+0.5,s.id,s.count);
+    delete chestStates[key];
+  }
+  sfx.breakBlock(BLOCKS[b].sound);
+  spawnBlockParticles(x,y,z,tileColors[BLOCKS[b].tiles.side]);
+  // 花丛有几率掉小麦种子
+  if(b===B_FLOWER&&Math.random()<0.5)spawnDrop(x+0.5,y+0.5,z+0.5,I.seeds,1);
+  // 小麦：成熟了掉小麦+种子，没成熟只掉种子
+  if(b===B_CROPS){
+    if(cropStage>=3){spawnDrop(x+0.5,y+0.5,z+0.5,I.wheat,1);spawnDrop(x+0.5,y+0.5,z+0.5,I.seeds,1+Math.floor(Math.random()*2));}
+    else spawnDrop(x+0.5,y+0.5,z+0.5,I.seeds,1);
+  }
+  let drop=BLOCKS[b].drop;
+  if(b===B_LEAVES||b===B_SPRUCE_LEAVES||b===B_DARK_LEAVES||b===B_CHERRY_LEAVES){
+    const r=Math.random();
+    if(r<0.06)drop=I.stick;else if(r<0.09)drop=I.string;else drop=0;
+  }
+  if(drop&&canHarvest(b,held))spawnDrop(x+0.5,y+0.5,z+0.5,drop,1);
+  else if(drop&&BLOCKS[b].tool){ // 工具不对：方块碎了但不掉东西，提示该用什么工具
+    const tierName=['','木镐','石镐','铁镐','钻石镐'][BLOCKS[b].minTier]||'镐子';
+    const need=BLOCKS[b].minTier<=1?'一把镐子':tierName+'或更好的镐子';
+    const nowT=performance.now();
+    if(!window._lastHarvestHint||nowT-window._lastHarvestHint>3000){
+      window._lastHarvestHint=nowT;
+      showToast('⛏️ '+BLOCKS[b].name+'碎掉了但没掉东西——要用'+need+'挖才会掉落！');
+    }
+  }
+  onWorldChanged();
+}
+let rodeGhast=false,usedPearl=false,tilledLand=false,plantedSeeds=false; // 任务用：骑过快乐恶魂 / 扔过末影珍珠 / 耕过地 / 种过小麦
+function mountGhast(m){
+  player.mounted=m;
+  rodeGhast=true;
+  showToast('骑上快乐恶魂啦！前进=朝准星方向飞，再点一次右键/放置下来');
+  updateTasks();
+}
+function dismountGhast(){
+  const m=player.mounted;
+  if(!m)return;
+  player.mounted=null;
+  player.pos.set(m.pos.x+1.2,m.pos.y+0.2,m.pos.z);
+  player.vel.set(0,0,0);
+  player.peakY=player.pos.y;
+  showToast('下来了');
+}
+function eatBread(){
+  if(player.hp<player.maxHp){
+    player.hp=Math.min(player.maxHp,player.hp+3);updateHearts();
+    showToast('🍞 真好吃！生命 +3');
+  }else showToast('🍞 啊呜啊呜……真好吃！');
+  if(gameMode!=='creative')consumeHeld(1);
+}
+// 枪战掩体方块：选中圆石方块右键放置（shooter 模式，8 个限量）
+function placeBarrier(){
+  if(gameMode!=='shooter'||player.dead)return;
+  const slot=inv.hot[player.sel];
+  if(!slot||!ITEMS[slot.id]||ITEMS[slot.id].type!=='block'){showToast('⛔ 请先选中掩体方块（数字键 7）');return;}
+  if(slot.count<=0){showToast('⛔ 掩体方块用完了');return;}
+  const t=raycastVoxel(5.2);
+  if(!t){showToast('⛔ 看向要放置的位置');return;}
+  const tx=t.x+t.nx,ty=t.y+t.ny,tz=t.z+t.nz;
+  if(!inW(tx,ty,tz))return;
+  const cur=getBlock(tx,ty,tz);
+  if(cur!==B_AIR&&cur!==B_WATER){showToast('⛔ 这里放不了');return;}
+  const pa=playerAABB(player.pos);
+  if(tx+1>pa.x0&&tx<pa.x1&&ty+1>pa.y0&&ty<pa.y1&&tz+1>pa.z0&&tz<pa.z1){showToast('⛔ 离自己太近了');return;}
+  setBlock(tx,ty,tz,slot.blockId||slot.id); // 写入世界 + 自动广播同步给队友
+  slot.count--;
+  if(slot.count<=0)inv.hot[player.sel]=null;
+  if(typeof updateHotbar==='function')updateHotbar();
+  if(typeof sfx!=='undefined'&&sfx.place)sfx.place();
+  showToast('🧱 掩体已放置（剩 '+(slot.count>0?slot.count:0)+' 个）');
+}
+function interactOrPlace(){
+  if(!inputEnabled())return;
+  if(gameMode==='shooter'){
+    // 枪战模式右键：地雷→布雷，掩体方块→放置掩体，否则→蓄力扔手榴弹
+    const held=heldItemId();
+    if(held&&ITEMS[held]&&ITEMS[held].type==='mine'){placeMine();return;}
+    if(held&&ITEMS[held]&&ITEMS[held].type==='block'){placeBarrier();return;}
+    throwGrenade();return;
+  }
+  if(player.mounted){dismountGhast();return;}
+  // 弓：射箭（要有箭，创造模式不用）
+  if(heldItemId()===I.bow){
+    if(gameMode!=='creative'&&!takeItemFromInv(I.arrow,1)){showToast('🏹 没有箭了！用木棍合成箭');return;}
+    shootArrow();return;
+  }
+  // 末影珍珠：扔出去传送到 8 格以外
+  if(heldItemId()===I.ender_pearl){
+    const dx=-Math.sin(player.yaw),dz=-Math.cos(player.yaw);
+    const tx=Math.floor(player.pos.x+dx*8),tz=Math.floor(player.pos.z+dz*8);
+    player.pos.set(tx+0.5,surfaceY(tx,tz)+1,tz+0.5);
+    player.vel.set(0,0,0);player.peakY=player.pos.y;
+    if(gameMode!=='creative')consumeHeld(1);
+    usedPearl=true;updateTasks();
+    showToast('💜 嗖——传送过来了！');
+    return;
+  }
+  // 面包：吃一口回血（随时都能吃）
+  if(heldItemId()===I.bread){eatBread();return;}
+  const mh=mobRaycast();
+  if(mh&&mh.mob.type==='hghast'&&mh.d<4.2){mountGhast(mh.mob);return;}
+  const t=raycastVoxel(5.2);
+  if(!t)return;
+  if(t.block===B_TABLE){openTable();return;}
+  if(t.block===B_FURNACE){openFurnace(t.x,t.y,t.z);return;}
+  if(t.block===B_CHEST){openChest(t.x,t.y,t.z);return;}
+  if(t.block===B_ENCHANT){openEnchant(t.x,t.y,t.z);return;}
+  if(t.block===B_PISTON||t.block===B_STICKY){pistonPush(t.x,t.y,t.z);return;}
+  if(t.block===B_DOOR||t.block===B_DOOR_OPEN){toggleDoor(t.x,t.y,t.z);return;}
+  if(t.block===B_BED||t.block===B_BED_HEAD){sleepInBed(t.x,t.y,t.z);return;}
+  const held=heldItemId();
+  // 锄头：把泥土/草方块耕成农田
+  if(held&&ITEMS[held]&&ITEMS[held].toolType==='hoe'&&(t.block===B_DIRT||t.block===B_GRASS)){
+    if(getBlock(t.x,t.y+1,t.z)!==B_AIR){showToast('上面被挡住了，没法耕地');return;}
+    setBlock(t.x,t.y,t.z,B_FARMLAND);
+    sfx.breakBlock('grass');
+    tilledLand=true;updateTasks();
+    showToast('🟫 耕好一块地！拿小麦种子点它就能种');
+    return;
+  }
+  // 小麦种子：种在农田上
+  if(held===I.seeds&&t.block===B_FARMLAND){
+    if(getBlock(t.x,t.y+1,t.z)!==B_AIR)return;
+    setBlock(t.x,t.y+1,t.z,B_CROPS);
+    facings[t.x+','+(t.y+1)+','+t.z]=0;
+    if(gameMode!=='creative')consumeHeld(1);
+    plantedSeeds=true;updateTasks();
+    showToast('🌱 种下了！等它慢慢长大，变黄了就能收');
+    return;
+  }
+  if(!held)return;
+  const it=ITEMS[held];
+  if(!it||it.type!=='block')return;
+  const tx=t.x+t.nx,ty=t.y+t.ny,tz=t.z+t.nz;
+  if(!inW(tx,ty,tz))return;
+  const cur=getBlock(tx,ty,tz);
+  if(cur!==B_AIR&&cur!==B_WATER)return;
+  // 不能放在玩家身体里
+  const pa=playerAABB(player.pos);
+  if(tx+1>pa.x0&&tx<pa.x1&&ty+1>pa.y0&&ty<pa.y1&&tz+1>pa.z0&&tz<pa.z1)return;
+  // 木门要占上下两格
+  if(it.blockId===B_DOOR){
+    if(!inW(tx,ty+1,tz)){showToast('上面没空间放门');return;}
+    const above=getBlock(tx,ty+1,tz);
+    if(above!==B_AIR&&above!==B_WATER){showToast('上面被挡住，门放不下');return;}
+  }
+  // 床要占两格：脚踩的这格+脸朝的方向那格（床头）
+  if(it.blockId===B_BED){
+    const f=playerFacingIdx();
+    const bd=[[0,-1],[1,0],[0,1],[-1,0]][f];
+    const hx=tx+bd[0],hz=tz+bd[1];
+    if(!inW(hx,ty,hz)){showToast('床头那边没空间');return;}
+    const hb=getBlock(hx,ty,hz);
+    if(hb!==B_AIR&&hb!==B_WATER){showToast('床头那边被挡住，床放不下');return;}
+    setBlock(hx,ty,hz,B_BED_HEAD);
+  }
+  setBlock(tx,ty,tz,it.blockId);
+  if(it.blockId===B_DOOR)setBlock(tx,ty+1,tz,B_DOOR);
+  if(it.blockId===B_FURNACE||it.blockId===B_PISTON||it.blockId===B_STICKY)facings[tx+','+ty+','+tz]=playerFacingIdx();
+  if(gameMode!=='creative')consumeHeld(1); // 创造模式放置不消耗
+  sfx.place(BLOCKS[it.blockId].sound);
+  onWorldChanged();
+}
+// 门：右键开/关（上下两格一起变）
+function toggleDoor(x,y,z){
+  let y0=y;
+  const b=getBlock(x,y,z);
+  if(b===B_DOOR||b===B_DOOR_OPEN){
+    const up=getBlock(x,y+1,z),down=getBlock(x,y-1,z);
+    const isDoor=v=>v===B_DOOR||v===B_DOOR_OPEN;
+    if(isDoor(up))y0=y;else if(isDoor(down))y0=y-1;else return;
+  }else return;
+  const cur=getBlock(x,y0,z);
+  const nb=(cur===B_DOOR)?B_DOOR_OPEN:B_DOOR;
+  setBlock(x,y0,z,nb);setBlock(x,y0+1,z,nb);
+  sfx.place('wood');
+  showToast(nb===B_DOOR_OPEN?'🚪 门打开了':'🚪 门关上了');
+  onWorldChanged();
+}
+// 床：晚上睡觉直接天亮，并记住重生点
+function sleepInBed(x,y,z){
+  const elev=Math.sin((dayTime-0.25)*Math.PI*2);
+  if(elev>=0.1){showToast('现在还不困，晚上再来睡觉吧 🌙');return;}
+  spawnPoint.set(x,y+1,z);
+  dayTime=0.27;
+  showToast('😴 睡了一觉，天亮了！重生点已记住');
+  saveGame();
+}
+// 活塞：手里拿着红石粉才能激活（红石驱动，每次消耗1个，创造模式免费）
+// 普通活塞=只推；粘性活塞=能推也能拉
+function pistonPush(x,y,z){
+  const pb=getBlock(x,y,z);
+  const sticky=(pb===B_STICKY);
+  const fi=facings[x+','+y+','+z];
+  const dirs=[[0,0,-1],[1,0,0],[0,0,1],[-1,0,0]];
+  const d=dirs[fi!==undefined?fi:playerFacingIdx()];
+  // 收集前方连续的方块
+  const line=[];
+  let cx=x+d[0],cy=y+d[1],cz=z+d[2];
+  while(line.length<12&&inW(cx,cy,cz)){
+    const b=getBlock(cx,cy,cz);
+    if(b===B_AIR||b===B_WATER)break;
+    if(b===B_BEDROCK){showToast('基岩推不动！');return;}
+    line.push([cx,cy,cz,b]);
+    cx+=d[0];cy+=d[1];cz+=d[2];
+  }
+  let action=null; // 'push' | 'pull'
+  if(line.length){
+    if(!inW(cx,cy,cz)){showToast('推到世界边界了');return;}
+    const endB=getBlock(cx,cy,cz);
+    if(endB!==B_AIR&&endB!==B_WATER){showToast('前面被堵住了');return;}
+    action='push';
+  }else if(sticky){
+    // 拉：面前一格为空，第二格有方块 → 拉回来
+    const b2=getBlock(cx+d[0],cy+d[1],cz+d[2]);
+    if(inW(cx+d[0],cy+d[1],cz+d[2])&&b2!==B_AIR&&b2!==B_WATER&&b2!==B_BEDROCK)action='pull';
+  }
+  if(!action){showToast(sticky?'面前没有可推/可拉的方块':'面前没有方块可推');return;}
+  // 红石驱动：手里要拿着红石粉
+  const held=heldItemId();
+  if(gameMode!=='creative'){
+    if(held!==I.redstone){showToast('🔴 需要手里拿着红石粉来驱动活塞！');return;}
+    consumeHeld(1);
+  }
+  if(action==='push'){
+    const moveFacing={};
+    for(let i=line.length-1;i>=0;i--){
+      const bx=line[i][0],by=line[i][1],bz=line[i][2],b=line[i][3];
+      const ok=bx+','+by+','+bz,nk=(bx+d[0])+','+(by+d[1])+','+(bz+d[2]);
+      if(facings[ok]!==undefined)moveFacing[nk]=facings[ok];
+      setBlock(bx+d[0],by+d[1],bz+d[2],b);
+      setBlock(bx,by,bz,B_AIR);
+      delete facings[ok];
+    }
+    for(const k in moveFacing)facings[k]=moveFacing[k];
+    spawnBlockParticles(line[0][0]+0.5,line[0][1]+0.5,line[0][2]+0.5,'rgb(190,190,190)');
+    showToast('⚡红石驱动！活塞把 '+line.length+' 个方块推了一格');
+  }else{
+    // 拉：第二格的方块移到面前一格
+    const b2=getBlock(cx+d[0],cy+d[1],cz+d[2]);
+    const ok=(cx+d[0])+','+(cy+d[1])+','+(cz+d[2]),nk=cx+','+cy+','+cz;
+    setBlock(cx,cy,cz,b2);
+    setBlock(cx+d[0],cy+d[1],cz+d[2],B_AIR);
+    if(facings[ok]!==undefined){facings[nk]=facings[ok];delete facings[ok];}
+    spawnBlockParticles(cx+0.5,cy+0.5,cz+0.5,'rgb(120,200,90)');
+    showToast('⚡粘性活塞把方块拉回来了！');
+  }
+  sfx.place('stone');
+  onWorldChanged();
+}
+function playerFacingIdx(){
+  const dx=-Math.sin(player.yaw),dz=-Math.cos(player.yaw);
+  if(Math.abs(dx)>Math.abs(dz))return dx>0?1:3;
+  return dz>0?2:0;
+}
+function consumeHeld(n){
+  const s=inv.hot[player.sel];
+  if(!s)return;
+  s.count-=n;
+  if(s.count<=0)inv.hot[player.sel]=null;
+  updateHotbar();
+}
+
+// ---------------- 粒子 ----------------
+const particleGeo=new THREE.BoxGeometry(0.09,0.09,0.09);
+const particleMats={};
+const particles=[];
+function spawnBlockParticles(x,y,z,color){
+  let mat=particleMats[color];
+  if(!mat){mat=new THREE.MeshLambertMaterial({color:new THREE.Color(color)});particleMats[color]=mat;}
+  for(let i=0;i<14;i++){
+    const m=new THREE.Mesh(particleGeo,mat);
+    m.position.set(x+0.3+Math.random()*0.4,y+0.3+Math.random()*0.4,z+0.3+Math.random()*0.4);
+    particles.push({m,
+      vx:(Math.random()-0.5)*3,vy:Math.random()*4+1,vz:(Math.random()-0.5)*3,
+      life:0.5+Math.random()*0.35});
+    particlesGroup.add(m);
+  }
+}
+// 血粒子：打中目标时红色喷溅（方向 = 攻击方向，血向后飞溅更有打击感）
+const BLOOD_COLORS=['rgb(210,30,30)','rgb(235,55,55)','rgb(165,18,18)','rgb(255,85,85)','rgb(120,12,12)'];
+function spawnBlood(x,y,z,dirX,dirZ){
+  const color=BLOOD_COLORS[(Math.random()*BLOOD_COLORS.length)|0];
+  let mat=particleMats[color];
+  if(!mat){mat=new THREE.MeshLambertMaterial({color:new THREE.Color(color)});particleMats[color]=mat;}
+  const n=12+((Math.random()*6)|0);
+  const bx=dirX||0,bz=dirZ||0;
+  for(let i=0;i<n;i++){
+    const m=new THREE.Mesh(particleGeo,mat);
+    m.position.set(x+0.2+Math.random()*0.6,y+0.3+Math.random()*0.8,z+0.2+Math.random()*0.6);
+    particles.push({m,
+      vx:(Math.random()-0.5)*4.5-bx*2.5, // 攻击反方向飞溅
+      vy:Math.random()*2.8+0.6,
+      vz:(Math.random()-0.5)*4.5-bz*2.5,
+      life:0.4+Math.random()*0.35});
+    particlesGroup.add(m);
+  }
+}
+function updateParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.life-=dt;
+    if(p.life<=0){particlesGroup.remove(p.m);particles.splice(i,1);continue;}
+    p.vy-=18*dt;
+    p.m.position.x+=p.vx*dt;
+    p.m.position.y+=p.vy*dt;
+    p.m.position.z+=p.vz*dt;
+    p.m.rotation.x+=dt*6;p.m.rotation.y+=dt*5;
+  }
+}
+
+// ---------------- 掉落物 ----------------
+const dropGeo=new THREE.BoxGeometry(0.26,0.26,0.26);
+const itemTexCache={};
+const drops=[];
+let nextDropNid=1; // 掉落物网络 id（联机同步用）
+function getItemTex(id){
+  if(itemTexCache[id])return itemTexCache[id];
+  const cv=document.createElement('canvas');cv.width=16;cv.height=16;
+  drawItemIcon(cv.getContext('2d'),id);
+  const tex=new THREE.CanvasTexture(cv);
+  tex.magFilter=THREE.NearestFilter;tex.minFilter=THREE.NearestFilter;tex.generateMipmaps=false;
+  itemTexCache[id]=tex;
+  return tex;
+}
+function spawnDrop(x,y,z,id,count,nid){
+  const mat=new THREE.MeshLambertMaterial({map:getItemTex(id)});
+  const m=new THREE.Mesh(dropGeo,mat);
+  m.position.set(x,y,z);
+  dropsGroup.add(m);
+  const d={m,id,count,vy:2.5,vx:(Math.random()-0.5)*1.5,vz:(Math.random()-0.5)*1.5,age:0,
+    nid:nid!==undefined?nid:nextDropNid++,pending:false};
+  drops.push(d);
+  // 联机：任何端产生掉落都广播，对端创建"影子"（单份掉落，防双捡）
+  if(NET.open&&NET.roomId&&nid===undefined){
+    netBroadcast({t:'drop',nid:d.nid,id,x,y,z,count,dim:curDim});
+  }
+  return d;
+}
+function updateDrops(dt){
+  for(let i=drops.length-1;i>=0;i--){
+    const d=drops[i];
+    d.age+=dt;
+    const p=d.m.position;
+    // 简易重力+落地
+    const below=getBlock(Math.floor(p.x),Math.floor(p.y-0.2),Math.floor(p.z));
+    if(!isSolidBlock(below)){
+      d.vy-=12*dt;p.y+=d.vy*dt;p.x+=d.vx*dt;p.z+=d.vz*dt;
+    }else{d.vy=0;p.y=Math.floor(p.y-0.2)+1+0.2;}
+    d.m.rotation.y+=dt*2;
+    // 吸附
+    const dx=player.pos.x-p.x,dy=(player.pos.y+0.9)-p.y,dz=player.pos.z-p.z;
+    const dist=Math.hypot(dx,dy,dz);
+    if(dist<1.7&&gameState==='playing'&&!player.dead){
+      p.x+=dx*dt*8;p.y+=dy*dt*8;p.z+=dz*dt*8;
+      if(dist<0.55){
+        if(NET.roomId){
+          if(NET.isHost){
+            // 房主权威拾取：加背包 + 移除 + 广播确认（客人端移除影子）
+            const pickCount=d.count;
+            const left=addItemToInv(d.id,d.count);
+            d.count=left;
+            if(left<=0){
+              dropsGroup.remove(d.m);d.m.material.dispose();drops.splice(i,1);sfx.pickup();
+              netBroadcast({t:'pickuped',nid:d.nid,by:NET.myId,itemId:d.id,count:pickCount});
+              continue;
+            }
+          }else{
+            // 联机客人：发拾取请求，等房主仲裁确认（防止同一掉落被两人捡到）
+            if(!d.pending){
+              d.pending=true;
+              netBroadcast({t:'pickup',nid:d.nid,by:NET.myId,itemId:d.id,count:d.count});
+            }
+            continue;
+          }
+        }else{
+          const left=addItemToInv(d.id,d.count);
+          d.count=left;
+          if(left<=0){dropsGroup.remove(d.m);d.m.material.dispose();drops.splice(i,1);sfx.pickup();continue;}
+        }
+      }
+    }
+    if(d.age>240){
+      dropsGroup.remove(d.m);d.m.material.dispose();drops.splice(i,1);
+      if(NET.open&&NET.roomId)netBroadcast({t:'dropgone',nid:d.nid}); // 告知对端移除影子
+    }
+  }
+}
+
