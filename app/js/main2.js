@@ -503,6 +503,14 @@ function setupWorld(seed,save){
     if(save.gameMode==='creative'||save.gameMode==='survival'||save.gameMode==='skyblock')gameMode=save.gameMode;
     if(typeof save.skinIdx==='number'&&save.skinIdx>=0&&save.skinIdx<SKINS.length)skinIdx=save.skinIdx;
     if(save.hot&&save.hot.length===9)inv.hot=save.hot;
+    // 🌱 树苗 id 迁移：49（旧红石粉冲突前）→ 75；旧存档方块 diff 里的 49 同步迁移
+    if(save.v===1){
+      const migrateStack=s=>{if(s&&s.id===49){s.id=75;}return s;};
+      inv.hot=inv.hot.map(migrateStack);
+      if(inv.store)inv.store=inv.store.map(migrateStack);
+      for(const k in blockDiff)if(blockDiff[k]===49)blockDiff[k]=75; // 树苗方块
+      for(const dn of ['overworld','nether','end']){const D=DIMS[dn];if(D&&D.diff)for(const k in D.diff)if(D.diff[k]===49)D.diff[k]=75;}
+    }
     if(save.store&&save.store.length===27)inv.store=save.store;
     if(save.armor&&save.armor.length===4)inv.armor=save.armor;
     if(save.tasks)for(let i=0;i<TASKS.length&&i<save.tasks.length;i++)TASKS[i].done=!!save.tasks[i];
