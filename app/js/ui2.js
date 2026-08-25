@@ -574,6 +574,42 @@ function buildPanels(){
     bh.addEventListener('click',()=>{if(anyPanelOpen())closeAllPanels();else openBook();});
     bh.addEventListener('touchstart',e=>{e.preventDefault();if(anyPanelOpen())closeAllPanels();else openBook();},{passive:false});
   }
+  // 🧗 游戏内跑酷挑战入口 + 🎵 音乐开关（HUD）
+  const pkh=$('btnParkourHud');
+  if(pkh){
+    const openPk=()=>{if(anyPanelOpen())closeAllPanels();else if(typeof startParkourChallenge==='function')startParkourChallenge(0);};
+    pkh.addEventListener('click',openPk);
+    pkh.addEventListener('touchstart',e=>{e.preventDefault();openPk();},{passive:false});
+  }
+  const mu=$('btnMusicHud');
+  if(mu){
+    const toggleMusic=()=>{
+      BGM.on=!BGM.on;
+      mu.textContent=BGM.on?'🎵 音乐':'🔇 音乐';
+      showToast(BGM.on?'🎵 背景音乐开啦！':'🔇 背景音乐关掉了');
+      if(BGM.on)BGM.nextT=0; // 马上响起来
+    };
+    mu.addEventListener('click',toggleMusic);
+    mu.addEventListener('touchstart',e=>{e.preventDefault();toggleMusic();},{passive:false});
+  }
+  // 触屏区的 🧗 / 🎵 按钮（iPad）
+  const pkt=$('btnParkour');
+  if(pkt){
+    const openPkt=()=>{if(anyPanelOpen())closeAllPanels();else if(typeof startParkourChallenge==='function')startParkourChallenge(0);};
+    pkt.addEventListener('touchstart',e=>{e.preventDefault();openPkt();},{passive:false});
+    pkt.addEventListener('click',openPkt);
+  }
+  const mut=$('btnMusic');
+  if(mut){
+    const toggleMut=()=>{
+      BGM.on=!BGM.on;
+      mut.textContent=BGM.on?'🎵':'🔇';
+      showToast(BGM.on?'🎵 背景音乐开啦！':'🔇 背景音乐关掉了');
+      if(BGM.on)BGM.nextT=0;
+    };
+    mut.addEventListener('touchstart',e=>{e.preventDefault();toggleMut();},{passive:false});
+    mut.addEventListener('click',toggleMut);
+  }
   const as=$('armorSlots');
   for(let i=0;i<4;i++)as.appendChild(makeSlot('armor',i));
   const cg=$('craftGrid');

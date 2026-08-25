@@ -197,6 +197,7 @@ function loop(t){
   altarChargeTick(dt); // 祭坛充能倒计时
   if(gameMode==='skyblock')updateSaplings(dt); // 空岛：树苗成长
   if(gameMode==='parkour')updateParkour(dt); // 跑酷：掉落回起点 / 进度 / 通关
+  parkourChallengeTick(); // 世界内跑酷挑战：检查点/掉落回点/通关奖励
   if(typeof updateArenaLoot==='function')updateArenaLoot(dt); // 捡枪模式：武器定时补刷（房主）
   if(typeof updateMissiles==='function')updateMissiles(dt); // 追踪导弹：飞行/追踪/碰撞
   updateArrows(dt);
@@ -1842,4 +1843,95 @@ function disposeMenuScene(){
     menuRenderer=null;
   }
   menuScene=null;menuCamera=null;menuClouds=[];
+}
+
+// ---------------- 🧗 世界内跑酷挑战（随时在当前位置生成一条平台路线，不换世界） ----------------
+const parkourChallenge={active:false,startY:0,finish:null,checkpoint:null,cpList:[]};
+function openParkour(){ // 游戏内 HUD/按钮入口
+  const pp=$('parkourPanel');
+  if(pp){pp.classList.remove('hidden');return;}
+  openPanel('parkourPanel');
+}
+// 跑酷平台上面腾出空间：把挡路的树叶、木头都清掉，不会被树遮住
+function clearParkourSpace(px,py,pz,size){
+  for(let a=-1;a<=size;a++)for(let c=-1;c<=size;c++)for(let h=0;h<=4;h++){
+    const b=getBlock(px+a,py+h,pz+c);
+    if(h===0){if(b!==B_AIR)continue;} // 平台这一格等下要铺方块
+    if(b===B_WOOL||b===B_GOLD_BLOCK||b===B_EMERALD_BLOCK||b===B_DIAMOND_BLOCK)continue; // 别清掉跑酷平台！
+    if(b!==B_AIR&&b!==B_WATER)setBlock(px+a,py+h,pz+c,B_AIR);
+  }
+}
+function startParkourChallenge(diff){ // 0 简单 / 1 普通 / 2 困难
+  if(!started){showToast('先进游戏再开跑酷哦！');return;}
+  if(curDim!=='overworld'){showToast('跑酷只在主世界有哦，先回主世界吧！');return;}
+  closeAllPanels();
+  const conf=[{n:15,size:3,gap:1.5,rise:0.4},{n:20,size:2,gap:2,rise:0.7},{n:25,size:1,gap:2.5,rise:1}][diff||0];
+  const dx=-Math.sin(player.yaw),dz=-Math.cos(player.yaw); // 朝你面对的方向修
+  let x=Math.floor(player.pos.x+dx*4),z=Math.floor(player.pos.z+dz*4);
+  const y=surfaceY(x,z)+3;
+  parkourChallenge.startY=y;parkourChallenge.cpList=[];
+  clearParkourSpace(x,y-1,z,2);
+  // 起点：3×3 金块平台
+  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)setBlock(x+a,y-1,z+b,B_GOLD_BLOCK);
+  parkourChallenge.checkpoint={x:x+0.5,y:y,z:z+0.5};
+  let px=x,pz=z,py=y;
+  for(let i=0;i<conf.n;i++){
+    const fwd=conf.gap+Math.random()*1.5;                  // 往前跳几格（随机！距离不远不近）
+    const side=(Math.random()-0.5)*3;                      // 左右歪一点（随机！）
+    px=px+Math.round(dx*fwd+(-dz)*side);
+    pz=pz+Math.round(dz*fwd+dx*side);
+    py=py+Math.floor(Math.random()*(conf.rise*2+1))-(Math.random()<0.25?1:0); // 大部分越来越高
+    if(py>56)py=56;if(py<parkourChallenge.startY)py=parkourChallenge.startY;
+    // 如果这格被树占了，就往上抬，直到空出来
+    let guard=0;
+    while(guard++<8&&getBlock(px,py,pz)!==B_AIR)py++;
+    clearParkourSpace(px,py,pz,conf.size);
+    const isFinish=i===conf.n-1;
+    const b=isFinish?B_DIAMOND_BLOCK:(i%5===4?B_EMERALD_BLOCK:B_WOOL);
+    for(let a=0;a<conf.size;a++)for(let c=0;c<conf.size;c++)setBlock(px+a,py,pz+c,b);
+    if(i%5===4&&!isFinish)parkourChallenge.cpList.push({x:px+conf.size/2,y:py+1.01,z:pz+conf.size/2}); // 绿宝石=检查点
+    if(isFinish)parkourChallenge.finish={x:px,y:py,z:pz,size:conf.size};
+  }
+  parkourChallenge.active=true;
+  player.pos.set(x+0.5,y,z+0.5);player.vel.set(0,0,0);player.peakY=y; // 把你传送到起点
+  showToast('🧗 跑酷开始！顺着羊毛平台跳到 💎钻石块终点！');
+}
+function endParkourChallenge(){
+  parkourChallenge.active=false;closeAllPanels();
+  showToast('🏳️ 跑酷结束啦，路线留在原地，随时可以再玩');
+}
+function parkourChallengeTick(){
+  const ep=$('btnEndParkour');
+  if(ep)ep.style.display=parkourChallenge.active?'block':'none'; // 挑战中才显示结束按钮
+  if(ep&&ep.style.display==='block'&&!ep._wired){
+    ep._wired=true;
+    ep.addEventListener('click',endParkourChallenge);
+    ep.addEventListener('touchstart',e=>{e.preventDefault();endParkourChallenge();},{passive:false});
+  }
+  if(!parkourChallenge.active||player.dead)return;
+  // 站上检查点
+  for(const c of parkourChallenge.cpList){
+    if(Math.abs(player.pos.x-c.x)<1.2&&Math.abs(player.pos.z-c.z)<1.2&&Math.abs(player.pos.y-c.y)<1.5){
+      if(parkourChallenge.checkpoint!==c){parkourChallenge.checkpoint=c;showToast('💚 检查点！掉下去会从这里继续');}
+    }
+  }
+  // 掉下去了：回检查点，不掉血
+  if(player.pos.y<parkourChallenge.startY-6){
+    const cp=parkourChallenge.checkpoint;
+    player.pos.set(cp.x,cp.y,cp.z);player.vel.set(0,0,0);player.peakY=cp.y;
+    showToast('😅 掉下来了，回检查点再来一次！');
+    return;
+  }
+  // 到达终点：赢！
+  const f=parkourChallenge.finish;
+  if(f&&player.pos.x>=f.x-0.3&&player.pos.x<=f.x+f.size+0.3&&player.pos.z>=f.z-0.3&&player.pos.z<=f.z+f.size+0.3&&
+     player.pos.y>=f.y+0.9&&player.pos.y<=f.y+2.5){
+    parkourChallenge.active=false;
+    giveItemToInv(I.diamond,3);
+    giveItemToInv(I.emerald,5);
+    spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(74,232,221)');
+    spawnBlockParticles(player.pos.x,player.pos.y+2,player.pos.z,'rgb(255,217,74)');
+    sfx.craft();
+    showToast('🎉 跑酷成功！奖励：3 颗钻石 + 5 颗绿宝石！');
+  }
 }

@@ -172,3 +172,12 @@ color:#fff;padding:8px 14px;border-radius:12px;font-size:16px;font-weight:bold;t
 .trade-row{display:flex;align-items:center;gap:8px}
 .trade-row .bk-cell{width:30px;height:30px}
 .trade-row .bk-cell canvas{width:24px;height:24px}
+
+/* ========== HUD 新入口：跑酷挑战 / 音乐开关 ========== */
+#btnParkourHud{position:absolute;right:14px;top:64px;pointer-events:auto;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.5);
+color:#fff;padding:8px 14px;border-radius:12px;font-size:16px;font-weight:bold;text-shadow:1px 1px 2px #000;cursor:pointer}
+#btnMusicHud{position:absolute;right:14px;top:114px;pointer-events:auto;background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.5);
+color:#fff;padding:8px 14px;border-radius:12px;font-size:16px;font-weight:bold;text-shadow:1px 1px 2px #000;cursor:pointer}
+
+#btnEndParkour{position:absolute;right:14px;top:164px;pointer-events:auto;background:rgba(120,40,40,.65);border:2px solid rgba(255,180,180,.6);
+color:#fff;padding:8px 14px;border-radius:12px;font-size:15px;font-weight:bold;text-shadow:1px 1px 2px #000;cursor:pointer}
