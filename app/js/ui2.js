@@ -613,7 +613,7 @@ function fillGrid(el,area,n){
   for(let i=0;i<n;i++)el.appendChild(makeSlot(area,i));
 }
 function openPanel(id){
-  hide('invPanel');hide('tablePanel');hide('furnacePanel');hide('bookPanel');hide('mpPanel');hide('cmdPanel');hide('chestPanel');hide('enchPanel');
+  hide('invPanel');hide('tablePanel');hide('furnacePanel');hide('bookPanel');hide('mpPanel');hide('cmdPanel');hide('chestPanel');hide('enchPanel');hide('brewPanel');hide('tradePanel');hide('modPanel');
   show(id);
   refreshPanels();drawPaperDoll();
   unlockPointer();mining=false;
@@ -796,7 +796,7 @@ function buildBook(){
 function closeAllPanels(){
   const was=anyPanelOpen();
   if(document.activeElement&&document.activeElement.blur)document.activeElement.blur(); // 收起键盘焦点，T键下次还能开
-  hide('invPanel');hide('tablePanel');hide('furnacePanel');hide('bookPanel');hide('mpPanel');hide('cmdPanel');hide('chestPanel');hide('enchPanel');
+  hide('invPanel');hide('tablePanel');hide('furnacePanel');hide('bookPanel');hide('mpPanel');hide('cmdPanel');hide('chestPanel');hide('enchPanel');hide('brewPanel');hide('tradePanel');hide('modPanel');
   curFurn=null;curChest=null;curEnch=null;
   if(was&&gameState==='playing'&&!isTouch&&!player.dead){
     setTimeout(()=>{

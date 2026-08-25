@@ -1651,7 +1651,10 @@ function initNetUI(){
   const modConfirm=$('modConfirmBtn');
   if(modConfirm)modConfirm.addEventListener('click',()=>{
     $('modPanel').classList.add('hidden');
-    showToast('🧩 模组设置已保存！');
+    showToast('🧩 模组设置已保存，开始游戏！');
+    // 与主「点击开始」同逻辑：有存档继续，没存档新世界
+    if(pendingSave&&activeSlotId){enterSaveSlot(activeSlotId);pendingSave=null;}
+    else startGame();
   });
   document.querySelectorAll('.mod-row').forEach(row=>{
     const toggle=e=>{
