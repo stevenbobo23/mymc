@@ -62,6 +62,7 @@ function publicRoom(r) {
     playerCount: (r.players || []).length,
     maxPlayers: r.maxPlayers || MAX_PLAYERS,
     mode: r.mode || 'survival',
+    loot: r.loot ? 1 : 0, // 枪战子模式：1=捡枪模式（地上刷武器），0=普通模式
     seed: r.seed,
     createdAt: r.createdAt
   };
@@ -81,7 +82,8 @@ async function genRoomId() {
 async function createRoom(b) {
   const name = String(b.name || '房主').slice(0, 16);
   const skin = Math.min(Math.max(0, (b.skin | 0) || 0), SKIN_N - 1);
-  const mode = b.mode === 'creative' ? 'creative' : (b.mode === 'shooter' ? 'shooter' : 'survival');
+  const mode = b.mode === 'creative' ? 'creative' : (b.mode === 'shooter' ? 'shooter' : (b.mode === 'skyblock' ? 'skyblock' : 'survival'));
+  const loot = b.loot ? 1 : 0; // 枪战捡枪模式标记
   const roomName = String(b.roomName || '方块世界').slice(0, 24); // 房间名与用户名分离，默认不带昵称
   const roomId = await genRoomId();
   // 客户端可指定 seed（从存档/当前世界开房）；无效则随机新世界
@@ -95,13 +97,14 @@ async function createRoom(b) {
     players: [{ id: '1', name: name, skin: skin, lastSeen: t }],
     maxPlayers: MAX_PLAYERS,
     mode: mode,
+    loot: loot,
     seed: seed,
     status: 'open',
     createdAt: t,
     updatedAt: t
   };
   await db.collection('mc_rooms').doc(roomId).set(room);
-  return ok({ roomId: roomId, playerId: '1', seed: seed, mode: mode, room: publicRoom(room) });
+  return ok({ roomId: roomId, playerId: '1', seed: seed, mode: mode, loot: loot, room: publicRoom(room) });
 }
 
 // ---------- 加入房间 ----------
@@ -122,7 +125,7 @@ async function joinRoom(b) {
   room.updatedAt = t;
   await db.collection('mc_rooms').doc(roomId).update({ players: room.players, updatedAt: t });
   return ok({
-    roomId: roomId, playerId: id, seed: room.seed, mode: room.mode,
+    roomId: roomId, playerId: id, seed: room.seed, mode: room.mode, loot: room.loot ? 1 : 0,
     host: room.host, players: room.players.map(p => ({ id: p.id, name: p.name, skin: p.skin }))
   });
 }
@@ -231,7 +234,7 @@ async function roomDetail(q) {
 async function updateMode(b) {
   const roomId = normId(b.roomId);
   if (!roomId) return fail('缺少参数');
-  const mode = b.mode === 'creative' ? 'creative' : (b.mode === 'shooter' ? 'shooter' : 'survival');
+  const mode = b.mode === 'creative' ? 'creative' : (b.mode === 'shooter' ? 'shooter' : (b.mode === 'skyblock' ? 'skyblock' : 'survival'));
   await db.collection('mc_rooms').doc(roomId).update({ mode: mode, updatedAt: now() }).catch(() => {});
   return ok({});
 }

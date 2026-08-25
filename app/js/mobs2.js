@@ -715,9 +715,9 @@ function playerRaycast(){
 }
 let attackCd=0;
 // ---------------- 枪战模式（shooter）：射击/换弹/重生/计分 ----------------
-let SHOOTER={score:{},target:10,winner:null,ammo:{},lastShot:0,reloading:false,reloadEnd:0,streak:0,lastKillT:0,spawnProtectT:0};
+let SHOOTER={score:{},target:10,winner:null,ammo:{},lastShot:0,reloading:false,reloadEnd:0,streak:0,lastKillT:0,spawnProtectT:0,reserve:{}};
 let arenaLoot=false; // 枪战子模式：false=普通（开局发全套武器）/ true=捡枪（地上随机刷武器，捡到才能用）
-function shooterReset(){SHOOTER={score:{},target:10,winner:null,ammo:{},lastShot:0,reloading:false,reloadEnd:0,streak:0,lastKillT:0,spawnProtectT:0};
+function shooterReset(){SHOOTER={score:{},target:10,winner:null,ammo:{},lastShot:0,reloading:false,reloadEnd:0,streak:0,lastKillT:0,spawnProtectT:0,reserve:{}};
   nadeReloading=false;nadeReloadEnd=0;nadeCharging=false;
   for(const mn of mines){mobsGroup.remove(mn.body);mobsGroup.remove(mn.lamp);mobsGroup.remove(mn.pole);mobsGroup.remove(mn.flag);mobsGroup.remove(mn.ring);}mines=[];}
 // 捡枪模式：武器掉落池（概率权重）+ 随机刷点 + 定时补刷（房主权威，客人靠 drop 广播同步）
@@ -741,7 +741,7 @@ function spawnArenaLoot(count){
     const x=Math.floor(Math.random()*52-26),z=Math.floor(Math.random()*52-26); // ±26 场景内
     if(!lootPointOk(x,z))continue;
     const id=lootPick();
-    spawnDrop(x+0.5,surfaceY(x,z)+0.6,z+0.5,id,(id===I.grenade?3:(id===I.mine?2:1)));
+    spawnDrop(x+0.5,surfaceY(x,z)+0.6,z+0.5,id,(id===I.grenade||id===I.mine?5:1));
     placed++;
   }
 }
@@ -765,9 +765,33 @@ function reloadGun(){ // R 换弹（或弹空自动）
   const g=it.gun,now=performance.now()/1000;
   if(SHOOTER.reloading&&now<SHOOTER.reloadEnd)return;
   if(gunClip(held)>=g.clip)return;
+  if(arenaLoot&&(it.type==='gun'||it.type==='missile')&&(SHOOTER.reserve[held]||0)<=0){ // 捡枪模式：无备弹不换弹（弹夹空即停火，枪/导弹打空即消失）
+    if(gunClip(held)<=0)removeGunFromHot(held); // 弹夹+备弹全空 -> 枪用完消失
+    else showToast('⛔ 没有备弹了！');
+    return;
+  }
   SHOOTER.reloading=true;SHOOTER.reloadEnd=now+g.reload;
   sfx.reload&&sfx.reload();
   showToast('🔄 换弹中…');
+}
+// 捡枪模式：枪用完（弹夹空+备弹空）从背包移除
+function removeGunFromHot(gunId){
+  const idx=inv.hot.findIndex(s=>s&&s.id===gunId);
+  if(idx>=0){
+    const name=ITEMS[gunId]?ITEMS[gunId].name:'武器';
+    inv.hot[idx]=null;
+    if(player.sel===idx)player.sel=Math.max(0,idx-1);
+    if(typeof updateHotbar==='function')updateHotbar();
+    updateGunHud();
+    showToast('🔫 '+name+' 打光了，从背包里消失了');
+  }
+}
+// 捡枪模式：拾取枪/导弹时标记为无备弹（一个弹夹打空就消失）
+function gunReserveInit(id){
+  if(arenaLoot&&ITEMS[id]&&(ITEMS[id].type==='gun'||ITEMS[id].type==='missile')){
+    if(!SHOOTER.reserve)SHOOTER.reserve={};
+    SHOOTER.reserve[id]=0;
+  }
 }
 // 体素 DDA：沿射线找最近实心方块的距离（子弹不能穿墙）
 function rayBlockDist(ox,oy,oz,dx,dy,dz,maxDist){
@@ -904,6 +928,7 @@ function shooterRespawn(){
   if(arenaLoot){
     // 捡枪模式：死亡重生 = 武器全掉光（徒手），重新去地上捡
     inv.hot=[null,null,null,null,null,null,null,{id:4,count:200},null];
+    SHOOTER.reserve={}; // 武器都没了，备弹池清空
     player.sel=0;
     updateHotbar();
     showToast('💀 你掉光了武器！去地上捡枪再战');
@@ -931,6 +956,16 @@ function showKillBanner(text,color){
 }
 function streakName(n){return ['','','⚡ 双杀！','🔥 三杀！','💥 四杀！','🌟 五杀！','👑 大杀特杀！'][Math.min(n,6)]||'👑 大杀特杀！';}
 function streakColor(n){return n>=5?'#ff9a3a':(n>=3?'#ffd24a':'#8ad4ff');}
+// 击杀里程碑：每到 10 的倍数喊"厉害的话"
+function milestoneMsg(n){
+  const m={
+    10:'🔱 10 杀！势不可挡！',20:'👑 20 杀！战神降临！',30:'💀 30 杀！人间兵器！',
+    40:'🔥 40 杀！杀神觉醒！',50:'☠️ 50 杀！终极杀戮机器！',60:'⚡ 60 杀！死神来了！',
+    70:'🌋 70 杀！毁灭者！',80:'👹 80 杀！恶魔降世！',90:'☄️ 90 杀！传说降临！',
+    100:'🏆 100 杀！杀戮之神！'
+  };
+  return m[n]||('⚔️ '+n+' 杀！无人能挡！');
+}
 // 伤害数字飘字（3D 位置投影到屏幕）
 function showDmgNumber(x,y,z,dmg,hs){
   const el=$('dmgLayer');if(!el||!camera)return;
@@ -947,7 +982,6 @@ function showDmgNumber(x,y,z,dmg,hs){
 }
 // 击杀处理：k=killer id, v=victim id, wn=武器名（名字用于显示）
 function shooterKill(k,v,kn,vn,wn){
-  if(SHOOTER.winner)return;
   const me=String(NET.myId);
   const k2=String(k),v2=String(v);
   // 自杀（被自己的手榴弹/地雷等炸死）：不计入击杀榜，只显示死亡原因（说明是什么导致的自杀）
@@ -962,19 +996,28 @@ function shooterKill(k,v,kn,vn,wn){
     return; // 自杀不改变任何人的击杀数
   }
   SHOOTER.score[k]=(SHOOTER.score[k]||0)+1;
+  const total=SHOOTER.score[k]; // 累计击杀数（无上限，无限击杀）
   const wTxt=wn?('用'+wn+' '):'';
+  const isMilestone=total>0&&total%10===0; // 每到 10 的倍数：喊厉害的话
+  if(isMilestone){
+    const msg=milestoneMsg(total);
+    const who=esc(kn||('玩家'+k));
+    if(k2===me)showKillBanner('🌟 '+msg,'#ffd24a');
+    else showKillBanner('🏆 '+who+' '+msg,'#ffd24a');
+  }
   if(k2===me){
     // 连杀判定：5 秒内再次击杀
     const now=performance.now()/1000;
     SHOOTER.streak=(now-SHOOTER.lastKillT<5)?SHOOTER.streak+1:1;
     SHOOTER.lastKillT=now;
-    const total=SHOOTER.score[k]; // 累计击杀数
-    if(SHOOTER.streak>=2){
-      // 连杀：大字横幅带击杀总数（双杀/三杀… (N 杀)）
-      showKillBanner(streakName(SHOOTER.streak)+' ('+total+' 杀)',streakColor(SHOOTER.streak));
-    }else{
-      // 单杀也弹横幅，击杀数一目了然
-      showKillBanner('🔫 '+wTxt+'击杀 '+esc(vn||'对手')+'！ ('+total+' 杀)','#8ad4ff');
+    if(!isMilestone){ // 里程碑时大横幅已喊话，击杀横幅让位（toast 仍完整）
+      if(SHOOTER.streak>=2){
+        // 连杀：大字横幅带击杀总数（双杀/三杀… (N 杀)）
+        showKillBanner(streakName(SHOOTER.streak)+' ('+total+' 杀)',streakColor(SHOOTER.streak));
+      }else{
+        // 单杀也弹横幅，击杀数一目了然
+        showKillBanner('🔫 '+wTxt+'击杀 '+esc(vn||'对手')+'！ ('+total+' 杀)','#8ad4ff');
+      }
     }
     showToast('🔫 你'+wTxt+'击杀了 '+esc(vn||'对手')+'！('+total+' 杀)');
   }
@@ -986,10 +1029,6 @@ function shooterKill(k,v,kn,vn,wn){
   }
   updateGunHud();
   if(typeof renderScoreBoard==='function')renderScoreBoard(); // 刷新左上角击杀榜
-  if(SHOOTER.score[k]>=SHOOTER.target){
-    SHOOTER.winner=k;
-    showKillBanner('🏆 '+esc(kn||('玩家'+k))+' 获得胜利！','#ffd24a');
-  }
 }
 function updateGunHud(){
   const el=$('gunHud');if(!el)return;
@@ -1000,15 +1039,22 @@ function updateGunHud(){
     const g=it.gun,clip=gunClip(held),now=performance.now()/1000;
     const reloading=SHOOTER.reloading&&now<SHOOTER.reloadEnd;
     $('gunName').textContent=it.name;
-    $('gunAmmo').textContent=reloading?'换弹中…':(clip+' / '+g.clip);
-    $('gunAmmo').style.color=reloading?'#ffd75e':(clip===0?'#f66':'#fff');
+    if(arenaLoot&&(it.type==='gun'||it.type==='missile')){
+      // 捡枪模式：无备弹（一个弹夹打空就消失）
+      const rv=SHOOTER.reserve[held]||0;
+      $('gunAmmo').textContent=reloading?'换弹中…':(clip+' / '+(rv>0?rv+' 备':'无备弹'));
+      $('gunAmmo').style.color=reloading?'#ffd75e':(clip===0?'#f66':'#fff');
+    }else{
+      $('gunAmmo').textContent=reloading?'换弹中…':(clip+' / '+g.clip);
+      $('gunAmmo').style.color=reloading?'#ffd75e':(clip===0?'#f66':'#fff');
+    }
   }else{
     $('gunName').textContent=arenaLoot?'🎒 捡武器':'徒手';
     $('gunAmmo').textContent=arenaLoot?'走近地上的发光物品':'';
   }
   // 计分板
   const sc=SHOOTER.score,me=String(NET.myId);
-  const rows=['🏆 目标 '+SHOOTER.target+' 杀'];
+  const rows=['⚔️ 无限击杀']; // 击杀无上限，杀到天荒地老
   for(const id in NET.players){
     const p=NET.players[id];
     const n=(id===me?'你':(p?p.name:('玩家'+id)));
@@ -1063,11 +1109,11 @@ function spawnGrenade(nid,x,y,z,vx,vy,vz,remote,aid,an){
   grenades.push({m,fuse,nid,pos:new THREE.Vector3(x,y,z),vel:new THREE.Vector3(vx,vy,vz),
     life:GRENADE_FUSE,bounced:false,remote:!!remote,aid:aid||null,an:an||''});
 }
-function throwGrenade(power){ // G 键长按蓄力 / 右键按住蓄力投掷（shooter 模式；5 颗数量，用完自动装填 4s）
+function throwGrenade(power){ // G 键长按蓄力 / 右键按住蓄力投掷（shooter 模式；普通模式 5 颗自动装填，捡枪模式 5 颗用完消失）
   if(gameMode!=='shooter'||player.dead)return;
   const now=performance.now()/1000;
-  const slot=inv.hot[4];
-  if(!slot||slot.id!==I.grenade||slot.count<=0){showToast('🔄 手榴弹自动装填中…');return;}
+  const slot=inv.hot.find(s=>s&&s.id===I.grenade); // 按 id 查找（捡枪模式手榴弹不固定槽位）
+  if(!slot||slot.count<=0){showToast(arenaLoot?'⛔ 没有手榴弹了！':'🔄 手榴弹自动装填中…');return;}
   if(nadeReloading){showToast('🔄 手榴弹自动装填中…');return;}
   nadeCdT=now;
   // 沿视线方向（含俯仰 pitch）投掷：朝上看天扔得高，朝下扔近且落地快
@@ -1082,12 +1128,28 @@ function throwGrenade(power){ // G 键长按蓄力 / 右键按住蓄力投掷（
   if(typeof handRecoilPulse==='function')handRecoilPulse(); // 投掷后坐
   showToast('💣 手榴弹！'+(pwr<0.99?'（蓄力 '+Math.round(pwr*100)+'%）':''));
   if(NET.open&&NET.roomId)netBroadcast({t:'nade',id:nid,x,y,z,vx:dx*SPEED,vy:dy*SPEED+2,vz:dz*SPEED,aid:NET.myId,an:NET.myName});
-  // 消耗一颗手榴弹；扔完自动装填（4s 后补满）
+  // 消耗一颗手榴弹：普通模式扔完自动装填（4s 后补满）；捡枪模式用完直接消失
   slot.count--;
   if(typeof updateHotbar==='function')updateHotbar();
   if(slot.count<=0){
-    nadeReloading=true;nadeReloadEnd=now+4;
-    showToast('🔄 手榴弹用完了，自动装填中…（4s）');
+    if(arenaLoot){
+      removeInvItemFromHot(I.grenade); // 捡枪模式：5 颗扔完 -> 从背包消失
+    }else{
+      nadeReloading=true;nadeReloadEnd=now+4;
+      showToast('🔄 手榴弹用完了，自动装填中…（4s）');
+    }
+  }
+}
+// 通用：从快捷栏移除用完的物品（捡枪模式武器/手榴弹/地雷打光消失）
+function removeInvItemFromHot(itemId){
+  const idx=inv.hot.findIndex(s=>s&&s.id===itemId);
+  if(idx>=0){
+    const name=ITEMS[itemId]?ITEMS[itemId].name:'物品';
+    inv.hot[idx]=null;
+    if(player.sel===idx)player.sel=Math.max(0,idx-1);
+    if(typeof updateHotbar==='function')updateHotbar();
+    updateGunHud();
+    showToast('💥 '+name+' 用完了，从背包里消失了');
   }
 }
 // ---------------- 手榴弹蓄力（按住蓄力，松手投掷，1 秒充满） ----------------
@@ -1095,8 +1157,8 @@ let nadeCharging=false,nadeChargeT=0,nadeChargeAmt=0;
 const NADE_CHARGE_TIME=1.0;
 function startNadeCharge(){
   if(gameMode!=='shooter'||player.dead||NET_APPLYING)return;
-  const slot=inv.hot[4];
-  if(!slot||slot.id!==I.grenade||slot.count<=0||nadeReloading){showToast('🔄 手榴弹自动装填中…');return;}
+  const slot=inv.hot.find(s=>s&&s.id===I.grenade); // 按 id 查找（捡枪模式不固定槽位）
+  if(!slot||slot.count<=0||nadeReloading){showToast(arenaLoot?'⛔ 没有手榴弹了！':'🔄 手榴弹自动装填中…');return;}
   const now=performance.now()/1000;
   if(nadeCharging)return;
   nadeCharging=true;nadeChargeT=now;nadeChargeAmt=0;
@@ -1234,25 +1296,29 @@ function spawnMine(mid,x,z,aid,an){
   mobsGroup.add(body);mobsGroup.add(lamp);mobsGroup.add(pole);mobsGroup.add(flag);mobsGroup.add(ring);
   mines.push({mid,body,lamp,pole,flag,ring,flagMat,ringMat,pos:new THREE.Vector3(x+0.5,gy+0.06,z+0.5),aid:aid||null,an:an||'',armed:false,armedT:0,t:0});
 }
-function placeMine(){ // 手持地雷右键放置（shooter 模式，无限颗，1s 装填）
+function placeMine(){ // 手持地雷右键放置（shooter 模式；普通模式无限颗，捡枪模式 5 颗用完消失）
   if(gameMode!=='shooter'||player.dead)return;
   const now=performance.now()/1000;
-  if(now-mineCdT<1){showToast('🔄 地雷装填中…');return;} // 1s 换弹
+  if(now-mineCdT<1){showToast('🔄 地雷装填中…');return;} // 1s 放置间隔
   const slot=inv.hot[player.sel];
-  if(!slot||slot.id!==I.mine){showToast('⛔ 请先选中地雷（数字键 6）');return;}
+  if(!slot||slot.id!==I.mine){showToast('⛔ 请先选中地雷（数字键 7）');return;}
   const myCount=mines.filter(m=>m.aid===NET.myId).length; // 每人各自上限
   if(myCount>=MINE_MAX){showToast('⛔ 地雷满了（每人最多 '+MINE_MAX+' 颗）');return;}
   const fx=-Math.sin(player.yaw),fz=-Math.cos(player.yaw);
   const mx=Math.floor(player.pos.x+fx),mz=Math.floor(player.pos.z+fz);
   const gy=surfaceY(mx,mz);
   if(gy<ARENA_GROUND-1||getBlock(mx,gy+1,mz)!==0){showToast('⛔ 这里不能放地雷');return;}
-  // 无限颗：不消耗库存
-  mineCdT=now; // 1s 装填计时
+  mineCdT=now; // 1s 放置间隔
   const mid=NET.myId+'_'+(nextMineId++); // id 带发送者前缀，避免两端各自从 1 计数导致冲突
   spawnMine(mid,mx,mz,NET.myId,NET.myName);
   sfx.throwNade&&sfx.throwNade();
   showToast('💣 地雷已埋下（对方看不见）');
   if(NET.open&&NET.roomId)netBroadcast({t:'mine',id:mid,x:mx,z:mz,aid:NET.myId,an:NET.myName});
+  if(arenaLoot){ // 捡枪模式：每放一颗消耗库存，5 颗放完 -> 从背包消失
+    slot.count--;
+    if(typeof updateHotbar==='function')updateHotbar();
+    if(slot.count<=0)removeInvItemFromHot(I.mine);
+  }
 }
 function explodeMine(x,y,z,aid,an){
   // 地雷爆炸：粒子 + 冲击波 + 专用伤害（踩中 25 必死，范围 3 比手榴弹小但更致命）
@@ -1317,6 +1383,7 @@ function fireMissile(){ // 左键发射：准星对准目标 -> 锁定追踪 3 �
   }
   SHOOTER.lastShot=now;
   gunSetClip(I.missile,gunClip(I.missile)-1);
+  if(gunClip(I.missile)<=0)reloadGun(); // 弹夹打空：立即换弹（捡枪模式无备弹 -> 导弹消失）
   const cp=Math.cos(player.pitch),sp=Math.sin(player.pitch);
   const dx=-Math.sin(player.yaw)*cp,dy=sp,dz=-Math.cos(player.yaw)*cp;
   // 对准目标发射：发射瞬间准星命中的玩家即锁定目标（未命中 -> 直飞无追踪）
@@ -1465,7 +1532,25 @@ function updateArrows(dt){
 }
 function tryAttackMob(){
   if(!inputEnabled())return;
-  if(gameMode==='shooter'){tryShootGun();return;} // 枪战模式：左键=开枪
+  if(gameMode==='shooter'){
+    if(tryShootGun())return; // 有枪/导弹：开枪
+    // 徒手近战：没拿武器也能攻击（小伤害 1，遇到残血敌人可以补刀）
+    const mh=mobRaycast(), ph=playerRaycast();
+    if(mh&&(!ph||mh.d<=ph.d)){
+      hurtMob(mh.mob,1);
+      if(NET.open&&!NET.isHost&&mh.mob.nid)netBroadcast({t:'mobhit',id:mh.mob.nid,dmg:1}); // 客人攻击：同步给房主结算
+    }else if(ph){
+      // PVP：广播伤害给被攻击者（对方本地扣血 + 击退），防双端重复结算
+      if(NET.open&&NET.roomId){
+        netBroadcast({t:'pvphit',target:ph.id,dmg:1,x:player.pos.x,y:player.pos.y,z:player.pos.z,attacker:NET.myName});
+        sfx.hit();
+        const tp=NET.players[ph.id];
+        if(tp)spawnBlood(tp.x,tp.y+1,tp.z,-Math.sin(player.yaw),-Math.cos(player.yaw)); // 红色血粒子
+      }
+    }
+    attackCd=0.5;
+    return;
+  }
   const held=heldItemId();
   const it=held?ITEMS[held]:null;
   const hstack=inv.hot[player.sel];

@@ -96,13 +96,13 @@ function physicsStep(dt,input){
       const armor=totalArmor();
       let dmg=Math.floor(dist-3);
       dmg=Math.max(0,Math.round(dmg*(1-Math.min(armor*0.04,0.8))));
-      if(dmg>0)damagePlayer(dmg,'从高处摔落');
+      if(gameMode!=='parkour'&&dmg>0)damagePlayer(dmg,'从高处摔落'); // 跑酷不掉落伤害
     }
     player.peakY=player.pos.y;
   }
   if(player.onGround)player.peakY=player.pos.y;
-  // 掉出世界
-  if(player.pos.y<-10)damagePlayer(100,'掉出了世界');
+  // 掉出世界（跑酷模式由 updateParkour 回起点，不判死）
+  if(player.pos.y<-10&&gameMode!=='parkour')damagePlayer(100,'掉出了世界');
   // 缓慢回血
   if(player.hp<player.maxHp&&performance.now()/1000-player.lastDamage>5){
     player.regenT=(player.regenT||0)+dt;
@@ -116,6 +116,7 @@ function totalArmor(){
 }
 function damagePlayer(dmg,reason){
   if(player.dead)return;
+  if(gameMode==='parkour')return; // 跑酷：不掉血（掉落由 updateParkour 回起点）
   if(gameMode==='creative')return; // 创造模式不掉血
   if(gameMode==='shooter'&&SHOOTER.spawnProtectT>0){showToast('🛡 出生保护中，免疫伤害！');return;} // 出生保护免伤
   player.hp-=dmg;
@@ -914,17 +915,21 @@ function getItemTex(id){
   itemTexCache[id]=tex;
   return tex;
 }
-function spawnDrop(x,y,z,id,count,nid){
+function spawnDrop(x,y,z,id,count,nid,vx,vy,vz){
   const mat=new THREE.MeshLambertMaterial({map:getItemTex(id)});
   const m=new THREE.Mesh(dropGeo,mat);
   m.position.set(x,y,z);
   dropsGroup.add(m);
-  const d={m,id,count,vy:2.5,vx:(Math.random()-0.5)*1.5,vz:(Math.random()-0.5)*1.5,age:0,
+  const d={m,id,count,
+    vy:vy!==undefined?vy:2.5,
+    vx:vx!==undefined?vx:(Math.random()-0.5)*1.5,
+    vz:vz!==undefined?vz:(Math.random()-0.5)*1.5,
+    age:0,
     nid:nid!==undefined?nid:nextDropNid++,pending:false};
   drops.push(d);
-  // 联机：任何端产生掉落都广播，对端创建"影子"（单份掉落，防双捡）
+  // 联机：任何端产生掉落都广播（含初始速度，对端物理一致），对端创建"影子"（单份掉落，防双捡）
   if(NET.open&&NET.roomId&&nid===undefined){
-    netBroadcast({t:'drop',nid:d.nid,id,x,y,z,count,dim:curDim});
+    netBroadcast({t:'drop',nid:d.nid,id,x,y,z,count,dim:curDim,vx:d.vx,vy:d.vy,vz:d.vz});
   }
   return d;
 }
@@ -950,6 +955,7 @@ function updateDrops(dt){
             // 房主权威拾取：加背包 + 移除 + 广播确认（客人端移除影子）
             const pickCount=d.count;
             const left=addItemToInv(d.id,d.count);
+            if(typeof gunReserveInit==='function')gunReserveInit(d.id); // 捡枪模式：枪拾取初始化备弹
             d.count=left;
             if(left<=0){
               dropsGroup.remove(d.m);d.m.material.dispose();drops.splice(i,1);sfx.pickup();
@@ -966,6 +972,7 @@ function updateDrops(dt){
           }
         }else{
           const left=addItemToInv(d.id,d.count);
+          if(typeof gunReserveInit==='function')gunReserveInit(d.id); // 捡枪模式：枪拾取初始化备弹
           d.count=left;
           if(left<=0){dropsGroup.remove(d.m);d.m.material.dispose();drops.splice(i,1);sfx.pickup();continue;}
         }

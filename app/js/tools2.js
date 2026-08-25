@@ -697,7 +697,7 @@ function registerContent(){
     ctx.fillStyle='#555';ctx.fillRect(4,6,9,1);
     ctx.fillStyle='#2a2a2a';ctx.fillRect(4,9,2,4);ctx.fillRect(6,10,1,3);
     ctx.fillStyle='#8a8a8a';ctx.fillRect(11,7,1,2);
-  },type:'gun',gun:{dmg:8,cd:0.35,clip:12,reload:1.1,spread:0.05,range:40}});
+  },type:'gun',gun:{dmg:8,cd:0.35,clip:10,reload:1.1,spread:0.05,range:40}});
   defItem('smg','冲锋枪',{icon:ctx=>{ // 长枪身 + 弹匣 + 握把
     ctx.fillStyle='#2e3a4a';ctx.fillRect(2,5,12,3);
     ctx.fillStyle='#4a5a6a';ctx.fillRect(3,5,11,1);
@@ -727,7 +727,7 @@ function registerContent(){
     ctx.fillStyle='#4a7a3a';ctx.fillRect(3,9,10,1);
     ctx.fillStyle='#3a5a2a';ctx.fillRect(3,11,10,1);
     ctx.fillStyle='#b03030';ctx.fillRect(7,5,2,4);
-  },type:'mine',maxStack:3});
+  },type:'mine',maxStack:5}); // 捡枪模式：捡一次 5 颗，用完消失
   defItem('missile','追踪导弹',{icon:ctx=>{ // 白色细长弹体 + 红色弹头 + 尾翼
     ctx.fillStyle='#e8e8e8';ctx.fillRect(3,5,10,6); // 弹身
     ctx.fillStyle='#f0f0f0';ctx.fillRect(4,5,8,1);

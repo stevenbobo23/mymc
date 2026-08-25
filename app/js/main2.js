@@ -109,6 +109,7 @@ function touchSaveMeta(id){
 }
 function saveGame(slotId){
   if(!started||player.dead)return;
+  if(gameMode==='parkour')return; // 跑酷：单局模式不存档（存档恢复不支持，避免污染存档槽）
   const id=slotId||activeSlotId;
   if(!id)return;
   // 存档前先把当前维度的改动同步进 DIMS
@@ -123,11 +124,12 @@ function saveGame(slotId){
     hot:inv.hot,store:inv.store,armor:inv.armor,
     diff:blockDiff,facings:facings,furn:furnStates,chest:chestStates,
     tasks:TASKS.map(t=>t.done?1:0),dragonKilled};
-  if(gameMode==='shooter'){ // 枪战存档附加：场景 + 子模式 + 战绩（竞技场掩体已含在 diff/dims）
+  if(gameMode==='shooter'){ // 枪战存档附加：场景 + 子模式 + 战绩 + 备弹（竞技场掩体已含在 diff/dims）
     s.arenaScene=arenaScene;
     s.arenaLoot=arenaLoot?1:0;
     s.score=SHOOTER.score;
     s.target=SHOOTER.target;
+    s.reserve=SHOOTER.reserve; // 捡枪模式：枪的备弹池
   }
   try{localStorage.setItem(slotKey(id),JSON.stringify(s));}catch(e){}
   touchSaveMeta(id);
@@ -149,6 +151,7 @@ function restoreShooterSave(save){
   shooterInit(true); // 保留已捡武器（捡枪模式存档恢复不清空）
   if(save.score)SHOOTER.score=save.score;
   if(typeof save.target==='number')SHOOTER.target=save.target;
+  SHOOTER.reserve={}; // 捡枪模式：无备弹（一个弹夹打空枪就消失），忽略旧存档备弹
   updateGunHud();
 }
 // 通用"载入存档进入游戏"（开始界面继续 / 存档目录进入 共用）
@@ -185,6 +188,7 @@ function loop(t){
   dimHazardTick(dt);
   cropTick(dt);
   if(gameMode==='skyblock')updateSaplings(dt); // 空岛：树苗成长
+  if(gameMode==='parkour')updateParkour(dt); // 跑酷：掉落回起点 / 进度 / 通关
   if(typeof updateArenaLoot==='function')updateArenaLoot(dt); // 捡枪模式：武器定时补刷（房主）
   if(typeof updateMissiles==='function')updateMissiles(dt); // 追踪导弹：飞行/追踪/碰撞
   updateArrows(dt);
@@ -196,13 +200,32 @@ function loop(t){
       if(now>=SHOOTER.reloadEnd){
         SHOOTER.reloading=false;
         const held=heldItemId();
-        if(held&&ITEMS[held]&&ITEMS[held].type==='gun'){gunSetClip(held,ITEMS[held].gun.clip);showToast('✅ 换弹完成！');}
+        if(held&&ITEMS[held]&&(ITEMS[held].type==='gun'||ITEMS[held].type==='missile')){
+          if(arenaLoot&&ITEMS[held].type==='gun'){
+            const g=ITEMS[held].gun;
+            const need=g.clip-gunClip(held);
+            const reserve=SHOOTER.reserve[held]||0;
+            if(reserve>0){
+              const take=Math.min(need,reserve);
+              SHOOTER.reserve[held]=reserve-take;
+              gunSetClip(held,gunClip(held)+take);
+              showToast('✅ 换弹完成！');
+            }else{
+              gunSetClip(held,0);
+              showToast('⛔ 没有备弹了！');
+            }
+            if(gunClip(held)<=0&&(SHOOTER.reserve[held]||0)<=0)removeGunFromHot(held); // 用完消失
+          }else{
+            gunSetClip(held,ITEMS[held].gun.clip);
+            showToast('✅ 换弹完成！');
+          }
+        }
       }
     }
     if(typeof updateGrenades==='function')updateGrenades(dt);
     if(typeof updateMines==='function')updateMines(dt);
-    // 手榴弹用完自动装填：4s 后补满 5 颗
-    if(typeof nadeReloading!=='undefined'&&nadeReloading){
+    // 手榴弹用完自动装填：4s 后补满 5 颗（仅普通模式；捡枪模式手榴弹用完直接消失，不装填）
+    if(typeof nadeReloading!=='undefined'&&nadeReloading&&!arenaLoot){
       const now=performance.now()/1000;
       if(now>=nadeReloadEnd){
         nadeReloading=false;
@@ -292,7 +315,7 @@ function startGame(){
     const meta=getSlotMeta(activeSlotId);
     $('saveFabName').textContent=meta?('「'+meta.name+'」'):'';
   }
-  showToast(gameMode==='skyblock'?'🏝️ 空岛模式：砍树→收树苗→种树→扩展浮岛，按 T 看挑战':(gameMode==='creative'?'🧱 创造模式：背包里可拿所有物品 · 跳跃键飞行':(isTouch?'左侧摇杆移动 · 点「背包」合成 · 点 📖 看所有配方':'WASD 移动 · 左键挖掘 · 右键放置 · E 背包')));
+  showToast(gameMode==='parkour'?'🏃 跑酷模式：跳完所有平台！Shift 冲刺 · 掉下去回起点':(gameMode==='skyblock'?'🏝️ 空岛模式：砍树→收树苗→种树→扩展浮岛，按 T 看挑战':(gameMode==='creative'?'🧱 创造模式：背包里可拿所有物品 · 跳跃键飞行':(isTouch?'左侧摇杆移动 · 点「背包」合成 · 点 📖 看所有配方':'WASD 移动 · 左键挖掘 · 右键放置 · E 背包'))));
   if(isTouch)setTimeout(()=>{if(gameState==='playing')showToast('合成木板：背包→点原木→点合成格→点成品取出');},2800);
   if(location.search.indexOf('book=1')>=0)setTimeout(()=>{if(gameState==='playing')openBook();},400);
   if(location.search.indexOf('inv=1')>=0)setTimeout(()=>{if(gameState==='playing')openInventory();},400);
@@ -445,7 +468,7 @@ function setupWorld(seed,save){
   dayTime=0.34;
   player.hp=player.maxHp;player.dead=false;player.vel.set(0,0,0);
   player.mounted=null;player.sel=0;rodeGhast=false;
-  TASKS=((save?save.gameMode:gameMode)==='skyblock')?SKY_TASKS:SURVIVAL_TASKS; // 按模式切换任务链（空岛/生存）
+  TASKS=(gameMode==='parkour')?[]:(((save?save.gameMode:gameMode)==='skyblock')?SKY_TASKS:SURVIVAL_TASKS); // 跑酷无任务链；空岛/生存按模式切换
   for(const t of TASKS)t.done=false;
   if(save){
     // 恢复维度
@@ -481,7 +504,7 @@ function setupWorld(seed,save){
     player.pos.copy(spawnPoint);
   }
   player.peakY=player.pos.y;
-  spawnMobs();
+  if(gameMode!=='parkour')spawnMobs(); // 跑酷：纯跳跃，无怪物
   onArmorChanged();updateHearts();updateHotbar();updateTasks();refreshAll();
 }
 // ---------------- 空岛模式 ----------------
@@ -496,6 +519,86 @@ function startSkyBlock(){
   player.vel.set(0,0,0);player.peakY=player.pos.y;
   showToast('🏝️ 空岛模式：从一棵树开始！');
   startGame();
+}
+// ---------------- 跑酷模式 ----------------
+// 山谷桥梁：两侧石山之间的峡谷上方铺平台桥，沿 +Z 跳跃前进，掉下去回起点重跑
+let parkour=null; // {diff,total,plat,startX,startY,startZ,endZ,platZones,done}
+function startParkour(diff){ // diff: 'easy' 简单 / 'hard' 复杂
+  if(started)return;
+  const pp=$('parkourPanel');if(pp)pp.classList.add('hidden'); // 关掉选择面板，避免遮挡
+  gameMode='parkour';
+  setupWorld(Math.floor(Math.random()*1000000000),null);
+  const easy=diff==='easy';
+  parkour={diff,total:easy?20:30,plat:0,startX:0,startY:30,startZ:0,endZ:0,platZones:[],done:false};
+  buildParkourPlatforms();
+  spawnPoint.set(parkour.startX+0.5,parkour.startY+1,parkour.startZ+0.5);
+  player.pos.copy(spawnPoint);
+  player.yaw=Math.PI;player.pitch=0; // 面朝 +Z（平台方向）
+  player.vel.set(0,0,0);player.peakY=player.pos.y;
+  updateParkourHud();
+  showToast(easy?'🏃 简单跑酷：走跳就行，掉下去回起点！':'🏃 复杂跑酷：窄桥要冲刺跳（Shift）！掉下去回起点！');
+  startGame();
+}
+function buildParkourPlatforms(){
+  const p=parkour,easy=p.diff==='easy';
+  const y0=p.startY=30;
+  let z=0;
+  // 起点大平台（宽 7 × 长 6）
+  for(let dz=0;dz<6;dz++)for(let dx=-3;dx<=3;dx++)setBlock(dx,y0,z+dz,B_STONE);
+  z+=6;
+  let cy=y0;
+  for(let i=0;i<p.total;i++){
+    const w=easy?2:((i%2===0)?1:2);        // 半宽：简单2（宽5）/ 复杂 1,2 交替
+    const thick=easy?3:((i%4===3)?3:2);    // z 厚：简单3 / 复杂 2（3 格厚平台偶发；厚1无法助跑跳不过间距，废弃）
+    const gap=2;                             // 间距：简单/复杂统一 2 格（走跳轻松；复杂模式靠窄平台/升阶/斜跳体现难度，间距不再拉开）
+    if(!easy&&i%3===2&&i%5!==4)cy++;       // 复杂每 3 个升 1 格（斜跳平台不升阶，避免斜跳+升阶叠加）
+    const ox=easy?0:((i%5===4)?2:0);       // 复杂每 5 个斜跳偏移 2 格（原 3 格对角超冲刺跳极限）
+    const mat=easy?B_GRASS:((i%2)?B_COBBLE:B_STONE);
+    for(let dx=-w;dx<=w;dx++)for(let dz=0;dz<thick;dz++)setBlock(ox+dx,cy,z+dz,mat);
+    if((i+1)%5===0)setBlock(ox+w+1,cy+1,z+Math.floor(thick/2),B_GLOWSTONE); // 每 5 个平台荧石标记：放平台侧边（不挡玩家通行路径！放平台中间 cy+1 是玩家脚高度会卡住）
+    p.platZones.push([z,z+thick,cy]);
+    z+=gap+thick;
+  }
+  // 终点大平台 + 金旗（荧石柱 + 羊毛顶，放高处不挡路）
+  for(let dz=0;dz<5;dz++)for(let dx=-3;dx<=3;dx++)setBlock(dx,cy,z+dz,B_STONE);
+  setBlock(0,cy+3,z+2,B_GLOWSTONE);setBlock(0,cy+4,z+2,B_WOOL);
+  p.endZ=z+2;p.lastZ=z+5;
+}
+function updateParkour(dt){
+  const p=parkour;if(!p||p.done)return;
+  // 掉进峡谷（低于谷底）-> 回起点重跑
+  if(player.pos.y<22){
+    player.pos.set(p.startX+0.5,p.startY+1,p.startZ+0.5);
+    player.vel.set(0,0,0);player.peakY=player.pos.y;
+    p.plat=0;
+    showToast('💨 掉下去了！回起点重跑');
+    updateParkourHud();
+    return;
+  }
+  // 进度：玩家 z 所在平台
+  for(let i=0;i<p.platZones.length;i++){
+    if(player.pos.z>=p.platZones[i][0]&&player.pos.z<=p.platZones[i][1]+1){
+      if(p.plat!==i+1){p.plat=i+1;updateParkourHud();}
+      break;
+    }
+  }
+  // 到达终点（z 到终点平台 + 高度接近平台层）
+  if(player.pos.z>=p.endZ-0.5&&Math.abs(player.pos.y-(p.startY+0.8))<5){
+    p.done=true;
+    if(typeof showKillBanner==='function')showKillBanner('🏆 通关了！跑酷大师！','#ffd24a');
+    showToast('🎉 你通过了'+(p.diff==='easy'?'简单':'复杂')+'跑酷！');
+    spawnBlockParticles(0,p.startY+2,p.endZ,'rgb(255,210,100)');
+    updateParkourHud();
+  }
+}
+function updateParkourHud(){
+  const board=$('gunBoard');if(!board)return;
+  if(gameMode==='parkour'&&parkour){
+    board.style.display='block';
+    board.innerHTML='🏃 '+(parkour.diff==='easy'?'简单跑酷':'复杂跑酷')+'<br>平台 '+(parkour.done?parkour.total:parkour.plat)+'/'+parkour.total+(parkour.done?'<br>🏆 已通关！':'<br>掉下去回起点');
+  }else if(gameMode!=='shooter'){
+    board.style.display='none';
+  }
 }
 // 树苗成长：每 2 秒检查，4% 概率长成树（需下方草地/泥土 + 上方 4 格空间）
 let saplingTimer=0;
@@ -756,7 +859,8 @@ const NET_MSG_HANDLERS={
     const dims={};
     for(const dn of ['overworld','nether','end'])dims[dn]={diff:DIMS[dn].diff||{},fac:DIMS[dn].fac||{},furn:DIMS[dn].furn||{},chest:DIMS[dn].chest||{}};
     netSendTo(gid,{t:'welcome',id:gid,seed:SEED,dayTime,diff:blockDiff,fac:facings,players:roster,dim:curDim,dims,mode:gameMode,scene:arenaScene,loot:arenaLoot?1:0,
-      mines:mines.map(m=>({id:m.mid,x:Math.floor(m.pos.x),z:Math.floor(m.pos.z),aid:m.aid,an:m.an}))});
+      mines:mines.map(m=>({id:m.mid,x:Math.floor(m.pos.x),z:Math.floor(m.pos.z),aid:m.aid,an:m.an})),
+      drops:drops.map(d=>({nid:d.nid,id:d.id,count:d.count,x:d.m.position.x,y:d.m.position.y,z:d.m.position.z}))});
     netBroadcast({t:'join',id:gid,skin:o.skin||0,name:o.name||('玩家'+gid),armor:o.armor||[null,null,null,null]},gid);
     if(!NET.avatars[gid])addAvatar(gid,o.skin||0,o.armor);
     showToast('👥 '+esc(o.name||'朋友')+' 进入了你的世界！');
@@ -776,6 +880,10 @@ const NET_MSG_HANDLERS={
     renderScoreBoard(); // 进入房间：显示击杀榜（shooter 模式）
     // 房主早埋的地雷全量同步（隐形，后加入的客人才踩得到）
     if(o.mines&&Array.isArray(o.mines))for(const mn of o.mines)spawnMine(mn.id,mn.x,mn.z,mn.aid,mn.an);
+    // 房主当前掉落物全量同步（新客人加入时创建影子——否则看不到已存在的武器/物品）
+    if(o.drops&&Array.isArray(o.drops))for(const dd of o.drops){
+      if(!drops.some(x=>x.nid===dd.nid))spawnDrop(dd.x,dd.y,dd.z,dd.id,dd.count,dd.nid);
+    }
     if(wdim!=='overworld'){
       // 房主不在主世界 -> 客人切到同维度开始（保持一致体验）
       curDim=wdim;
@@ -938,9 +1046,9 @@ const NET_MSG_HANDLERS={
     if(av)av.visible=!!o.alive;
     if(NET.isHost)netBroadcast(o,String(senderId));
   },
-  drop(o,senderId){ // 掉落物同步：对端创建影子（单份掉落）
+  drop(o,senderId){ // 掉落物同步：对端创建影子（含初始速度，物理一致；单份掉落）
     if(o.dim!==curDim)return;
-    if(!drops.some(x=>x.nid===o.nid))spawnDrop(o.x,o.y,o.z,o.id,o.count,o.nid);
+    if(!drops.some(x=>x.nid===o.nid))spawnDrop(o.x,o.y,o.z,o.id,o.count,o.nid,o.vx,o.vy,o.vz);
     if(NET.isHost)netBroadcast(o,String(senderId)); // 房主转发给其他客人
   },
   dropgone(o,senderId){ // 对端掉落过期消失 -> 移除本地影子
@@ -964,6 +1072,7 @@ const NET_MSG_HANDLERS={
     if(idx>=0){dropsGroup.remove(drops[idx].m);drops[idx].m.material.dispose();drops.splice(idx,1);}
     if(String(o.by)===String(NET.myId)&&!NET.isHost){
       addItemToInv(o.itemId,o.count);
+      if(typeof gunReserveInit==='function')gunReserveInit(o.itemId); // 捡枪模式：客人拾取枪也初始化备弹
       sfx.pickup();
     }
   },
@@ -1024,6 +1133,7 @@ async function mpCreateRoom(){
         shooterInit(true); // 保留存档里的武器（捡枪模式不清空）
         if(pendingRoomSave.score)SHOOTER.score=pendingRoomSave.score;
         if(typeof pendingRoomSave.target==='number')SHOOTER.target=pendingRoomSave.target;
+        SHOOTER.reserve={}; // 捡枪模式：无备弹（一个弹夹打空枪就消失），忽略旧存档备弹
         updateGunHud();
       }else{
         activeSlotId=createSaveSlot(null); // 每次新枪战 = 全新独立存档槽
@@ -1452,6 +1562,19 @@ function initStartUI(){
   $('saveDirBtn').addEventListener('click',()=>{renderSavePanel('play');$('savePanel').classList.remove('hidden');});
   const sb=$('skyBlockBtn');
   if(sb)sb.addEventListener('click',()=>{pendingSave=null;gameMode='skyblock';startSkyBlock();});
+  // 跑酷模式：按钮 -> 简单/复杂选择面板
+  const pk=$('parkourBtn');
+  if(pk)pk.addEventListener('click',()=>{
+    if(typeof closeAllPanels==='function')closeAllPanels();
+    const pp=$('parkourPanel');
+    if(pp)pp.classList.remove('hidden');
+  });
+  const pkEasy=$('parkourEasyBtn');
+  if(pkEasy)pkEasy.addEventListener('click',()=>{if(typeof closeAllPanels==='function')closeAllPanels();startParkour('easy');});
+  const pkHard=$('parkourHardBtn');
+  if(pkHard)pkHard.addEventListener('click',()=>{if(typeof closeAllPanels==='function')closeAllPanels();startParkour('hard');});
+  const pkCancel=$('parkourCancelBtn');
+  if(pkCancel)pkCancel.addEventListener('click',()=>$('parkourPanel').classList.add('hidden'));
   $('savePanelClose').addEventListener('click',()=>$('savePanel').classList.add('hidden'));
   $('roomNewWorldBtn').addEventListener('click',()=>{
     pendingRoomSave=null; // 新世界/新场景开房

@@ -336,6 +336,32 @@ function genSkyBlockChunk(cx,cz){
   chunks[key]=arr;
   return arr;
 }
+// 跑酷模式：山谷桥梁地形（两侧石山 |x|>11 高36 + 中间深谷 |x|<=11 谷底18，平台桥由 startParkour 铺在峡谷上方）
+function genParkourChunk(cx,cz){
+  const key=ck(cx,cz);
+  if(chunks[key])return chunks[key];
+  const arr=new Uint8Array(CH*H*CH);
+  const x0=cx*CH,z0=cz*CH;
+  for(let lx=0;lx<CH;lx++)for(let lz=0;lz<CH;lz++){
+    const x=x0+lx;
+    const isValley=Math.abs(x)<=11;
+    const h=isValley?18:36;
+    for(let y=0;y<H;y++){
+      let b=B_AIR;
+      if(y===0)b=B_BEDROCK;
+      else if(y<h-3)b=B_STONE;
+      else if(y<h)b=isValley?B_STONE:B_DIRT;
+      else if(y===h)b=isValley?B_STONE:(Math.abs(x)<=13?B_STONE:B_GRASS);
+      arr[lidx(lx,y,lz)]=b;
+    }
+  }
+  for(let lx=0;lx<CH;lx++)for(let lz=0;lz<CH;lz++)for(let y=0;y<H;y++){
+    const d=blockDiff[(x0+lx)+','+y+','+(z0+lz)];
+    if(d!==undefined)arr[lidx(lx,y,lz)]=d;
+  }
+  chunks[key]=arr;
+  return arr;
+}
 function genArenaChunk(cx,cz){
   const key=ck(cx,cz);
   if(chunks[key])return chunks[key];
@@ -386,6 +412,7 @@ function genChunkData(cx,cz){
   if(curDim==='end')return genEndChunk(cx,cz);
   if(gameMode==='shooter'&&curDim==='overworld')return genArenaChunk(cx,cz); // 枪战模式：竞技场
   if(gameMode==='skyblock'&&curDim==='overworld')return genSkyBlockChunk(cx,cz); // 空岛模式：浮岛
+  if(gameMode==='parkour'&&curDim==='overworld')return genParkourChunk(cx,cz); // 跑酷模式：山谷桥梁
   const key=ck(cx,cz);
   if(chunks[key])return chunks[key];
   const arr=new Uint8Array(CH*H*CH);

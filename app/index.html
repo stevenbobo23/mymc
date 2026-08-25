@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:,">
 <title>方块世界 - Minecraft风格网页游戏</title>
-    <link rel="stylesheet" href="css/style.css?v=20260803p">
+    <link rel="stylesheet" href="css/style2.css?v=20260803o">
 
 </head>
 <body>
@@ -26,6 +26,8 @@
     </div>
   </div>
   <div id="tasks" style="display:none"></div>
+  <!-- 枪战击杀榜（左上角，shooter 模式显示） -->
+  <div id="scoreBoard" style="display:none;position:absolute;left:10px;top:10px;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.25);color:#fff;padding:8px 12px;font-size:13px;line-height:1.9;min-width:150px;z-index:22;pointer-events:none"></div>
   <div id="bottomleft">
     <canvas id="armorCv" width="182" height="18"></canvas>
     <canvas id="heartsCv" width="182" height="18"></canvas>
@@ -226,7 +228,9 @@
 <div id="pause" class="overlay-full hidden">
   <h2>游戏暂停</h2>
   <p>鼠标已释放。点击下方按钮回到游戏。</p>
-  <button id="resumeBtn">继续游戏</button>
+  <button id="resumeBtn">▶ 继续游戏</button>
+  <button id="disconnectBtn" class="hidden">🌐 断开联机</button>
+  <button id="backHomeBtn" style="background:linear-gradient(180deg,#3a6a8a,#2a4e6e)">💾 保存并返回首页</button>
 </div>
 
 <div id="death" class="overlay-full hidden">
@@ -254,30 +258,11 @@
   <button id="startBtn" class="mcbtn mcbtn-big">点击开始</button>
   <button id="newWorldBtn" class="mcbtn mcbtn-orange hidden">🌍 创建新世界</button>
   <button id="saveDirBtn" class="mcbtn">💾 存档目录</button>
+  <button id="skyBlockBtn" class="mcbtn mcbtn-teal">🏝️ 空岛模式</button>
+  <button id="parkourBtn" class="mcbtn mcbtn-orange">🏃 跑酷模式</button>
   <button id="shooterBtn" class="mcbtn mcbtn-red">🔫 枪战模式</button>
   <button id="mpBtn" class="mcbtn mcbtn-green">🌐 联机大厅</button>
   <button id="helpBtn" class="mcbtn mcbtn-sm mcbtn-gray" style="min-width:150px">📖 操作帮助</button>
-  <div id="scenePanel" class="mc-overlay hidden">
-    <h2 style="color:#ffd24a;font-size:26px;margin-bottom:14px;text-shadow:2px 2px 0 #000">🎯 选择枪战场景</h2>
-    <div id="sceneList" style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:760px"></div>
-    <button id="sceneCancelBtn" class="mcbtn mcbtn-gray" style="margin-top:16px;font-size:16px;padding:9px 30px">取消</button>
-  </div>
-  <!-- 存档目录面板 -->
-  <div id="savePanel" class="mc-overlay hidden">
-    <div class="mc-dialog">
-      <h2 id="savePanelTitle" style="color:#8ad4ff;font-size:22px;margin:0 0 4px;text-shadow:1px 1px 0 #000">💾 存档目录</h2>
-      <div class="hint" style="color:#aaa;font-size:12px;margin-bottom:12px">每个存档独立保存世界/背包/进度。进入游戏后点左下角 💾 保存，自动存档每 10 秒一次。</div>
-      <div id="saveList" style="display:flex;flex-direction:column;gap:8px;min-height:60px"></div>
-      <div id="newSaveWrap" style="display:flex;gap:8px;margin-top:14px">
-        <input id="newSaveName" maxlength="16" placeholder="新存档名字（留空自动命名）" style="flex:1;padding:8px 12px;font-size:14px;background:#222;color:#fff;border:1px solid #666;border-radius:6px">
-        <button id="newSaveBtn" class="mcbtn mcbtn-green" style="padding:8px 16px">➕ 新建存档</button>
-      </div>
-      <button id="roomNewWorldBtn" style="display:none;margin-top:14px;width:100%;padding:10px;font-size:15px;background:linear-gradient(#8a5a2a,#6e451e)">🆕 新世界开房（全新随机地图）</button>
-      <div style="text-align:center;margin-top:12px">
-        <button id="savePanelClose" class="mcbtn mcbtn-gray" style="font-size:15px;padding:8px 30px">关闭</button>
-      </div>
-    </div>
-  </div>
   <div id="help" class="help hidden">
     <div class="cols">
       <div>
@@ -298,14 +283,50 @@
     <div style="margin-top:8px;color:#9f9">目标：砍树→合成→挖矿→烧铁→做护甲→挖钻石→下界合金！跟着左上角任务走。</div>
   </div>
 </div>
+<!-- 场景选择 / 存档目录面板：移到 body 直接子级（避免被 #start 的 z-index 限制，盖不过联机大厅 mpPanel） -->
+<div id="scenePanel" class="mc-overlay hidden">
+  <h2 style="color:#ffd24a;font-size:26px;margin-bottom:10px;text-shadow:2px 2px 0 #000">🎯 选择枪战场景</h2>
+  <div style="display:flex;gap:10px;justify-content:center;margin-bottom:14px">
+    <button id="lootModeNormal" class="mcbtn mcbtn-gray" style="min-width:150px;margin-top:0;font-size:15px">⚔️ 普通模式<br><span style="font-size:11px;opacity:.85">开局自带全套武器</span></button>
+    <button id="lootModePick" class="mcbtn mcbtn-gray" style="min-width:150px;margin-top:0;font-size:15px">🎒 捡枪模式<br><span style="font-size:11px;opacity:.85">地上刷武器 · 捡到才能用</span></button>
+  </div>
+  <div id="sceneList" style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:760px"></div>
+  <button id="sceneCancelBtn" class="mcbtn mcbtn-gray" style="margin-top:16px;font-size:16px;padding:9px 30px">取消</button>
+</div>
+<!-- 存档目录面板 -->
+<div id="savePanel" class="mc-overlay hidden">
+  <div class="mc-dialog">
+    <h2 id="savePanelTitle" style="color:#8ad4ff;font-size:22px;margin:0 0 4px;text-shadow:1px 1px 0 #000">💾 存档目录</h2>
+    <div class="hint" style="color:#aaa;font-size:12px;margin-bottom:12px">每个存档独立保存世界/背包/进度。进入游戏后点左下角 💾 保存，自动存档每 10 秒一次。</div>
+    <div id="saveList" style="display:flex;flex-direction:column;gap:8px;min-height:60px"></div>
+    <div id="newSaveWrap" style="display:flex;gap:8px;margin-top:14px">
+      <input id="newSaveName" maxlength="16" placeholder="新存档名字（留空自动命名）" style="flex:1;padding:8px 12px;font-size:14px;background:#222;color:#fff;border:1px solid #666;border-radius:6px">
+      <button id="newSaveBtn" class="mcbtn mcbtn-green" style="padding:8px 16px">➕ 新建存档</button>
+    </div>
+    <button id="roomNewWorldBtn" style="display:none;margin-top:14px;width:100%;padding:10px;font-size:15px;background:linear-gradient(#8a5a2a,#6e451e)">🆕 新世界开房（全新随机地图）</button>
+    <div style="text-align:center;margin-top:12px">
+      <button id="savePanelClose" class="mcbtn mcbtn-gray" style="font-size:15px;padding:8px 30px">关闭</button>
+    </div>
+  </div>
+</div>
+<!-- 跑酷模式选择面板（body 直接子级，避免被 #start 的 z-index 盖住） -->
+<div id="parkourPanel" class="mc-overlay hidden">
+  <h2 style="color:#ff9a3a;font-size:26px;margin-bottom:10px;text-shadow:2px 2px 0 #000">🏃 跑酷模式</h2>
+  <div class="hint" style="color:#aaa;font-size:12px;margin-bottom:14px">山谷桥梁间跳跃前进！掉下去回到起点重跑（不计时，通关即可）。</div>
+  <div style="display:flex;gap:10px;justify-content:center;margin-bottom:14px">
+    <button id="parkourEasyBtn" class="mcbtn mcbtn-green" style="min-width:170px;margin-top:0;font-size:15px">🟢 简单跑酷<br><span style="font-size:11px;opacity:.85">宽平台 · 走跳就行 · 20 关</span></button>
+    <button id="parkourHardBtn" class="mcbtn mcbtn-red" style="min-width:170px;margin-top:0;font-size:15px">🔴 复杂跑酷<br><span style="font-size:11px;opacity:.85">窄桥 · 冲刺跳 · 30 关</span></button>
+  </div>
+  <button id="parkourCancelBtn" class="mcbtn mcbtn-gray" style="margin-top:16px;font-size:16px;padding:9px 30px">取消</button>
+</div>
 
-    <script src="js/error.js?v=20260803p"></script>
-    <script src="js/three.min.js?v=20260803p"></script>
-    <script src="js/tools.js?v=20260803p"></script>
-    <script src="js/world.js?v=20260803p"></script>
-    <script src="js/player.js?v=20260803p"></script>
-    <script src="js/mobs.js?v=20260803p"></script>
-    <script src="js/ui.js?v=20260803p"></script>
-    <script src="js/main.js?v=20260803p"></script>
+    <script src="js/error.js?v=20260803o"></script>
+    <script src="js/three.min.js?v=20260803o"></script>
+    <script src="js/tools2.js?v=20260803o"></script>
+    <script src="js/world2.js?v=20260803o"></script>
+    <script src="js/player2.js?v=20260803o"></script>
+    <script src="js/mobs2.js?v=20260803o"></script>
+    <script src="js/ui2.js?v=20260803o"></script>
+    <script src="js/main2.js?v=20260803o"></script>
 </body>
 </html>
