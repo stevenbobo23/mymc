@@ -187,6 +187,14 @@ function loop(t){
   portalTick(dt);
   dimHazardTick(dt);
   cropTick(dt);
+  waterTick(dt); // 水流动（挖开水边/倒水后蔓延）
+  if(typeof villageTickT!=='undefined'){villageTickT+=dt;if(villageTickT>0.5){villageTickT=0;villageTick();}} // 走近村庄时刷村民
+  updateSwordRain(dt); // 剑雨（无尽贪婪剑特效）
+  updateEshots(dt); // 凋零骷髅头弹幕
+  updateSplash(dt); // 扔出去的药水
+  if(typeof updateHandTick==='function'){if(!spearInitDone&&camera&&typeof initSpearView==='function')initSpearView();updateHandTick(dt);} // 长矛视图 + 冲刺检测
+  updateFlyBlocks(dt); // 被凋零风暴吸起来的方块
+  altarChargeTick(dt); // 祭坛充能倒计时
   if(gameMode==='skyblock')updateSaplings(dt); // 空岛：树苗成长
   if(gameMode==='parkour')updateParkour(dt); // 跑酷：掉落回起点 / 进度 / 通关
   if(typeof updateArenaLoot==='function')updateArenaLoot(dt); // 捡枪模式：武器定时补刷（房主）
@@ -285,6 +293,12 @@ function loop(t){
     updateFurnaceUI();
     updateParticles(dt);
     updateDayNight(dt);
+    swordSparkleTick(dt); // 传说武器闪光
+    updateWeather(dt); // 下雨/打雷/闪电
+    ancientCityTick(); // 远古城市：坚守者巡逻
+    desertTempleTick(); // 沙漠神殿：压力板陷阱
+    mineshaftTick(); // 矿洞：矿车轨道巡逻
+    monumentTick(); // 海底神殿：守卫者刷新
   }
   processDirty(6);
   camera.position.set(player.pos.x,player.pos.y+PEYE,player.pos.z);
@@ -1614,6 +1628,34 @@ function initNetUI(){
   const netNameEl=$('netName');
   if(netNameEl){netNameEl.value=NET.myName;netNameEl.addEventListener('input',()=>{NET.myName=netNameEl.value.trim().slice(0,16)||NET.myName;try{localStorage.setItem('mc_net_name',NET.myName);}catch(e){}});}
   $('mpBtn').addEventListener('click',toggleMpPanel);
+  // 🧩 模组选择：开始界面开关模组
+  const renderMods=()=>{
+    document.querySelectorAll('.mod-row').forEach(row=>{
+      const on=modsOn[row.dataset.mod];
+      row.classList.toggle('off',!on);
+      const ck=row.querySelector('.mod-check');
+      if(ck)ck.textContent=on?'✅':'⬜';
+    });
+  };
+  renderMods();
+  const modBtn=$('modBtn');
+  if(modBtn)modBtn.addEventListener('click',()=>{renderMods();$('modPanel').classList.remove('hidden');});
+  const modConfirm=$('modConfirmBtn');
+  if(modConfirm)modConfirm.addEventListener('click',()=>{
+    $('modPanel').classList.add('hidden');
+    showToast('🧩 模组设置已保存！');
+  });
+  document.querySelectorAll('.mod-row').forEach(row=>{
+    const toggle=e=>{
+      e.preventDefault();
+      const k=row.dataset.mod;
+      modsOn[k]=!modsOn[k];
+      saveMods();renderMods();
+      if(typeof rebuildCreativeGrid==='function')rebuildCreativeGrid();
+      showToast(modsOn[k]?'🧩 模组打开啦！进游戏就能玩到':'🧩 模组关掉了');
+    };
+    row.addEventListener('click',toggle);
+  });
   $('mpFab').addEventListener('click',toggleMpPanel);
   $('mpHostBtn').addEventListener('click',()=>{
     if(NET.roomId){netStatus('你已经在一个房间里了，先点「断开联机」');return;}

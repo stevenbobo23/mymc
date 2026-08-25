@@ -81,6 +81,85 @@ const sfx={
   boom(){noiseBurst(0.4,300,0.5);tone(80,0.35,'sawtooth',0.4,40);tone(45,0.5,'sine',0.3,30);}
 };
 
+// ---------------- 🎵 背景音乐（自动生成的小钢琴曲：白天明亮、夜晚神秘，还会一个乐句一个乐句地弹） ----------------
+function bgmBus(){ // 带一点点回声的通道，声音听起来更空旷、更柔和
+  const c=ac();if(!c)return null;
+  if(BGM.bus)return BGM.bus;
+  const dry=c.createGain();dry.gain.value=0.9;
+  const dl=c.createDelay(1);dl.delayTime.value=0.27;
+  const fb=c.createGain();fb.gain.value=0.3;
+  const wet=c.createGain();wet.gain.value=0.3;
+  const out=c.createGain();out.gain.value=1;
+  dry.connect(out);dry.connect(dl);dl.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(out);
+  out.connect(c.destination);
+  BGM.bus=dry;
+  return dry;
+}
+function bgmNote(f,dur,vol,type,delay){ // 一个柔和的琴音：轻轻响起、轻轻消失（不会"咔"一下）
+  const c=ac();if(!c)return;
+  const bus=bgmBus();if(!bus)return;
+  const t0=c.currentTime+(delay||0);
+  const o=c.createOscillator(),o2=c.createOscillator(),g=c.createGain(),g2=c.createGain();
+  o.type=type||'triangle';o.frequency.value=f;
+  o2.type='sine';o2.frequency.value=f*2.003; // 高八度陪衬，差一点点音高会更柔
+  g2.gain.value=0.22;
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(vol,t0+0.07); // 慢慢起音
+  g.gain.setValueAtTime(vol,t0+Math.max(0.07,dur*0.35));
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur); // 慢慢收尾
+  o.connect(g);o2.connect(g2);g2.connect(g);g.connect(bus);
+  o.start(t0);o2.start(t0);o.stop(t0+dur+0.05);o2.stop(t0+dur+0.05);
+}
+const BGM={
+  on:true,timer:null,nextT:0,bar:0,bus:null,
+  mood:'day',moodT:0,melIdx:4,phraseLeft:0,
+  scales:{ // 三种心情的音阶
+    day:[0,2,4,7,9,12,14,16,19],   // 白天：明亮的五声音阶
+    night:[0,3,5,7,10,12,15,17],  // 夜晚：神秘的小调音阶
+    fun:[0,2,5,7,9,12,14,17]      // 活泼：跳跃的五声
+  },
+  bases:{day:220,night:174.6,fun:246.9},
+  chordRoots:[0,-4,-7,-2], // 低音和弦轮流走：稳稳的 → 温柔 → 下沉 → 回来
+  start(){if(this.timer)return;this.timer=setInterval(()=>this.tick(),200);},
+  tick(){
+    if(!this.on||typeof started==='undefined'||!started||document.hidden)return;
+    const c=ac();if(!c)return;
+    const now=c.currentTime;
+    if(now<this.nextT)return;
+    // 选心情：夜里自动变成神秘的曲子，白天在「明亮」和「活泼」之间慢慢换
+    this.moodT++;
+    const isNight=typeof dayTime!=='undefined'&&dayTime>0.55&&dayTime<0.95;
+    const want=isNight?'night':((this.moodT/24|0)%2===0?'day':'fun');
+    if(want!==this.mood){this.mood=want;this.phraseLeft=0;} // 换曲子啦
+    const sc=this.scales[this.mood],base=this.bases[this.mood];
+    // 每 4 拍铺一个软软的双音和弦垫底（让音乐厚厚的）
+    if(this.bar%4===0){
+      const r=this.chordRoots[(this.bar/4|0)%4];
+      const f=base*0.5*Math.pow(2,r/12);
+      bgmNote(f,5.5,0.045,'sine');
+      bgmNote(f*1.4983,5.5,0.026,'sine',0.09); // 五度和音
+    }
+    this.bar++;
+    // 旋律：像走路一样一个音一个音地挪，偶尔跳一下——这样听起来像真的曲子，不是乱弹
+    if(this.phraseLeft<=0)this.phraseLeft=2+((Math.random()*4)|0); // 一个乐句 2~5 个音
+    this.phraseLeft--;
+    const step=Math.random()<0.7?(Math.random()<0.5?-1:1):(Math.random()<0.5?-2:2);
+    this.melIdx=Math.max(0,Math.min(sc.length-1,this.melIdx+step));
+    const f=base*Math.pow(2,sc[this.melIdx]/12);
+    const dur=1.6+Math.random()*1.8;
+    bgmNote(f,dur,this.mood==='night'?0.05:0.06,'triangle');
+    // 偶尔叠一个三度和音，或者一闪一闪的高音
+    if(Math.random()<0.2){
+      const hi=Math.min(sc.length-1,this.melIdx+2);
+      bgmNote(base*Math.pow(2,sc[hi]/12),dur*0.9,0.03,'triangle',0.03);
+    }
+    if(Math.random()<0.22)bgmNote(f*2,dur*0.6,0.014,'sine',0.12);
+    // 乐句弹完就休息久一点，跟真的我的世界音乐一样不急不忙
+    const rest=this.phraseLeft<=0?2.4+Math.random()*2.6:0.55+Math.random()*0.95;
+    this.nextT=now+rest*(this.mood==='night'?1.35:1);
+  }
+};
+
 // ---------------- 程序化纹理 ----------------
 const TILE=16, ATLAS_N=16;
 const tileCanvases=[];   // tileIdx -> canvas 16x16
@@ -467,6 +546,149 @@ function buildTiles(){
       px(ctx,x,y,'#ffdba0');px(ctx,x+1,y,'#ffc880');
     }
   });
+  // 🌵 仙人掌：沙漠里的绿柱子
+  T.cactus=makeTile(ctx=>{
+    noisyBase(ctx,[46,128,50],0.25,55);
+    for(let x=2;x<16;x+=4)for(let y=0;y<16;y++)px(ctx,x,y,'#2a7a30'); // 深色竖条纹
+    speckle(ctx,10,[120,200,110],61);
+    speckle(ctx,6,[220,240,210],63); // 小刺
+  });
+  // 🍀 幸运方块：黄黄的，上面一个大大的问号！
+  function paintQ(ctx,color){
+    ctx.fillStyle=color;
+    // 问号：弯弯的上半 + 下面一点
+    ctx.fillRect(6,3,4,1);ctx.fillRect(5,4,1,2);ctx.fillRect(10,4,1,2);
+    ctx.fillRect(8,6,2,1);ctx.fillRect(7,7,2,2);
+    ctx.fillRect(7,11,2,2);
+  }
+  T.lucky=makeTile(ctx=>{
+    noisyBase(ctx,[240,200,40],0.25,88);
+    speckle(ctx,10,[255,240,140],89);
+    paintQ(ctx,'#7a5a10');
+  });
+  T.luckySuper=makeTile(ctx=>{
+    noisyBase(ctx,[255,220,90],0.3,90);
+    speckle(ctx,14,[255,255,220],91); // 闪闪金光
+    speckle(ctx,8,[255,180,30],92);
+    paintQ(ctx,'#ffffff');
+  });
+  T.unlucky=makeTile(ctx=>{
+    noisyBase(ctx,[70,50,90],0.3,93); // 暗暗的紫色，一看就不吉利
+    speckle(ctx,10,[120,80,160],94);
+    paintQ(ctx,'#2a1a3a');
+  });
+  T.luckyDiamond=makeTile(ctx=>{
+    noisyBase(ctx,[90,220,230],0.3,95); // 💎 钻石蓝！
+    speckle(ctx,12,[220,255,255],96);
+    paintQ(ctx,'#1a6a7a');
+  });
+  T.luckyRainbow=makeTile(ctx=>{
+    const cols=['#e04040','#e09030','#e0d040','#40c050','#4090e0','#9040d0'];
+    for(let i=0;i<6;i++){ctx.fillStyle=cols[i];ctx.fillRect(0,i*3,16,3);}
+    speckle(ctx,8,[255,255,255],97);
+    paintQ(ctx,'#ffffff');
+  });
+  T.luckyTnt=makeTile(ctx=>{
+    noisyBase(ctx,[200,50,40],0.3,98); // 🧨 红红的，一看就会炸！
+    speckle(ctx,10,[255,150,60],99);
+    paintQ(ctx,'#5a1010');
+  });
+  T.luckyMob=makeTile(ctx=>{
+    noisyBase(ctx,[120,200,90],0.3,100); // 👾 绿绿的，会蹦出生物！
+    speckle(ctx,10,[200,255,180],101);
+    paintQ(ctx,'#3a5a20');
+  });
+  // 海晶石：蓝绿色的海底石头，有一格一格的花纹（海底神殿专用！）
+  T.prism=makeTile(ctx=>{
+    noisyBase(ctx,[62,150,160],0.3,77);
+    ctx.fillStyle='#2a7a88';
+    for(let i=0;i<16;i+=5){ctx.fillRect(i,0,1,16);ctx.fillRect(0,i,16,1);} // 格子花纹
+    speckle(ctx,10,[120,220,225],81);
+    speckle(ctx,6,[20,90,100],83);
+  });
+  // 压力板：边边画成沙子的颜色，只有中间一小块灰板子——看起来就小小的！
+  T.plate=makeTile(ctx=>{
+    noisyBase(ctx,[222,196,122],0.22,66); // 和沙子一样的底色
+    speckle(ctx,['#e8d48e','#c9a860'],20,67);
+    ctx.fillStyle='#b8b8b0';
+    ctx.fillRect(3,3,10,10); // 中间的小板子
+    ctx.fillStyle='#c8c8c0';
+    ctx.fillRect(4,4,8,8); // 亮亮的面
+    ctx.fillStyle='#7a7a72';
+    ctx.fillRect(7,7,2,2); // 中间的按钮
+  });
+  // 幽匿方块：黑黑的深蓝绿色，上面有发光的蓝点点（远古城市专用！）
+  T.sculk=makeTile(ctx=>{
+    noisyBase(ctx,[10,32,36],0.35,88);
+    speckle(ctx,14,[16,60,66],91);
+    speckle(ctx,6,[30,190,180],97); // 发光的蓝绿色小点点
+    speckle(ctx,4,[5,16,20],99);
+  });
+  // 红石粉：撒在地上的红点阵（透明底，像小麦一样贴在方块上）
+  T.redstoneDust=makeTile(ctx=>{
+    ctx.clearRect(0,0,16,16);
+    ctx.fillStyle='#d42020';ctx.fillRect(7,7,2,2); // 中间一颗
+    ctx.fillStyle='#a81515';
+    ctx.fillRect(7,3,2,2);ctx.fillRect(7,11,2,2);ctx.fillRect(3,7,2,2);ctx.fillRect(11,7,2,2);
+    ctx.fillStyle='#e04040';
+    ctx.fillRect(5,5,1,1);ctx.fillRect(10,5,1,1);ctx.fillRect(5,10,1,1);ctx.fillRect(10,10,1,1);
+    ctx.fillRect(7,1,2,1);ctx.fillRect(7,14,2,1);ctx.fillRect(1,7,1,2);ctx.fillRect(14,7,1,2);
+  });
+  T.empty=makeTile(ctx=>{ctx.clearRect(0,0,16,16);});
+  // 金属块：亮面+深色边框，一看就很值钱
+  const metalBlock=(base,dark,light)=>makeTile(ctx=>{
+    noisyBase(ctx,base,0.08,17);
+    ctx.fillStyle=dark;ctx.fillRect(0,0,16,1);ctx.fillRect(0,15,16,1);ctx.fillRect(0,0,1,16);ctx.fillRect(15,0,1,16);
+    ctx.fillStyle=light;ctx.fillRect(1,1,14,1);ctx.fillRect(1,1,1,14);
+    ctx.fillStyle=dark;ctx.fillRect(3,3,10,1);ctx.fillRect(3,3,1,10);
+    ctx.fillStyle=light;ctx.fillRect(3,12,10,1);ctx.fillRect(12,3,1,10);
+  });
+  T.ironBlock=metalBlock([228,228,224],'#8a8a86','#ffffff');
+  T.goldBlock=metalBlock([255,217,74],'#b8890a','#fff2a8');
+  T.diamondBlock=metalBlock([74,232,221],'#1a9a90','#c8fff8');
+  T.netheriteBlock=metalBlock([87,75,94],'#3a323e','#8a7a96');
+  T.infinityBlock=metalBlock([181,106,232],'#5a2a80','#e8c0ff');
+  T.infinityOre=oreTile('#b46ae8',31); // 紫色矿点的无尽贪婪矿石
+  T.emeraldOre=oreTile('#2ad84a',37); // 绿色矿点的绿宝石矿石
+  T.emeraldBlock=metalBlock([42,200,74],'#1a7a3a','#aaffcc');
+  T.tnt=makeTile(ctx=>{ // TNT侧面：红红的一圈+白腰带
+    noisyBase(ctx,[200,50,30],0.25,41);
+    ctx.fillStyle='#f0e0c0';ctx.fillRect(0,6,16,4);
+    ctx.fillStyle='#3a2a20';ctx.font='bold 5px monospace';ctx.fillText('TNT',2,10);
+  });
+  T.tntTop=makeTile(ctx=>{ // TNT顶面：红+黑引线
+    noisyBase(ctx,[200,50,30],0.25,43);
+    ctx.fillStyle='#2a2a2a';ctx.fillRect(7,7,2,2);
+  });
+  T.superTnt=makeTile(ctx=>{ // 超级TNT：紫红相间，一看就很危险
+    noisyBase(ctx,[150,30,90],0.3,47);
+    ctx.fillStyle='#ffe080';ctx.fillRect(0,6,16,4);
+    ctx.fillStyle='#3a1a20';ctx.font='bold 4px monospace';ctx.fillText('SUPER',1,10);
+  });
+  T.altar=makeTile(ctx=>{ // 祭坛顶面：黑底紫色符文
+    noisyBase(ctx,[24,16,40],0.3,53);
+    px(ctx,4,4,'#b46ae8');px(ctx,11,4,'#b46ae8');px(ctx,4,11,'#b46ae8');px(ctx,11,11,'#b46ae8');
+    ctx.fillStyle='#8a3fd0';ctx.fillRect(6,6,4,4);
+    px(ctx,7,7,'#e0b0ff');px(ctx,8,8,'#e0b0ff');
+  });
+  T.command=makeTile(ctx=>{ // 命令方块：橙色小灯阵
+    noisyBase(ctx,[190,110,50],0.2,59);
+    for(let y=2;y<14;y+=3)for(let x=2;x<14;x+=3)px(ctx,x,y,'#ffe8b0');
+    ctx.fillStyle='#7a4a20';ctx.fillRect(0,0,16,1);ctx.fillRect(0,15,16,1);
+  });
+  T.bomb=makeTile(ctx=>{ // 恐怖炸弹：黑色大炸弹+骷髅感
+    noisyBase(ctx,[40,30,50],0.3,61);
+    ctx.fillStyle='#c576f0';ctx.fillRect(0,6,16,4);
+    ctx.fillStyle='#e8e8e8';ctx.fillRect(5,7,2,2);ctx.fillRect(9,7,2,2);
+    ctx.fillStyle='#2a1a30';ctx.fillRect(7,9,2,1);
+  });
+  T.brew=makeTile(ctx=>{ // 酿造台：深色底座+三根杆子
+    noisyBase(ctx,[60,55,70],0.3,67);
+    ctx.fillStyle='#3a3544';ctx.fillRect(2,11,12,4); // 底座
+    ctx.fillStyle='#8a8a9a';ctx.fillRect(7,3,2,8); // 中间杆子
+    ctx.fillStyle='#6a6a7a';ctx.fillRect(3,6,2,5);ctx.fillRect(11,6,2,5); // 旁边两根
+    ctx.fillStyle='#c9a020';ctx.fillRect(7,2,2,1);
+  });
 
   // 合成图集
   atlasCanvas=document.createElement('canvas');
@@ -499,7 +721,14 @@ const B_AIR=0,B_GRASS=1,B_DIRT=2,B_STONE=3,B_COBBLE=4,B_LOG=5,B_PLANKS=6,B_LEAVE
       B_SPRUCE_LOG=29,B_SPRUCE_LEAVES=30,B_JUNGLE_LOG=31,B_ACACIA_LOG=32,
       B_DARK_LOG=33,B_DARK_LEAVES=34,B_CHERRY_LOG=35,B_CHERRY_LEAVES=36,B_BED_HEAD=37,
       B_OBSIDIAN=38,B_PORTAL=39,B_ENDPORTAL=40,B_NETHERRACK=41,B_LAVA=42,B_GLOWSTONE=43,B_ENDSTONE=44,
-      B_FARMLAND=45,B_CROPS=46,B_CHEST=47,B_ENCHANT=48,B_SAPLING=49;
+      B_FARMLAND=45,B_CROPS=46,B_CHEST=47,B_ENCHANT=48,B_REDSTONE=49,
+      B_IRON_BLOCK=50,B_GOLD_BLOCK=51,B_DIAMOND_BLOCK=52,B_NETHERITE_BLOCK=53,B_INFINITY_BLOCK=54,
+      B_INFINITY_ORE=55,B_EMERALD_ORE=56,B_EMERALD_BLOCK=57,
+      B_TNT=58,B_SUPER_TNT=59,B_ALTAR=60,B_COMMAND=61,B_BOMB=62,B_BREW=63,B_SCULK=64,
+      B_CACTUS=65,B_PLATE=66,B_PRISM=67,
+      B_LUCKY=68,B_LUCKY_SUPER=69,B_UNLUCKY=70,
+      B_LUCKY_DIAMOND=71,B_LUCKY_RAINBOW=72,B_LUCKY_TNT=73,B_LUCKY_MOB=74,
+      B_SAPLING=75; // 树苗（原 49 让位给红石粉，挪到 75；空岛存档里旧树苗 id 49 需迁移）
 const BLOCKS={};
 function defBlock(id,name,hard,opt){
   opt=opt||{};
@@ -513,7 +742,7 @@ function defBlock(id,name,hard,opt){
 }
 // ---------------- 物品定义 ----------------
 const ITEMS={};
-const MAT_COLOR={leather:'#9a6335',chain:'#b9b9b9',iron:'#e8e8e8',gold:'#ffd94a',diamond:'#4ae8dd',netherite:'#574b5e',turtle:'#3f9e46',wood:'#b08b4d',stone:'#8f8f8f'};
+const MAT_COLOR={leather:'#9a6335',chain:'#b9b9b9',iron:'#e8e8e8',gold:'#ffd94a',diamond:'#4ae8dd',netherite:'#574b5e',turtle:'#3f9e46',wood:'#b08b4d',stone:'#8f8f8f',infinity:'#b46ae8',god:'#ffe8a0',storm:'#7a4ae8'};
 // 当前穿的盔甲材质数组 [helmet,chest,legs,boots]（null=没穿），用于联机同步 avatar 穿甲外观
 function armorMats(){
   if(!inv||!inv.armor)return[null,null,null,null];
@@ -531,6 +760,10 @@ function defItem(key,name,opt){
     toolType:opt.toolType||null, tier:opt.tier||0, speed:opt.speed||1, dmg:opt.dmg||1,
     armorSlot:opt.armorSlot!==undefined?opt.armorSlot:null, armorPts:opt.armorPts||0, mat:opt.mat||null,
     gun:opt.gun||null,           // 枪战武器参数 {dmg,cd,clip,reload,spread,range,pellets?}
+    food:opt.food||0,          // 能吃的东西：回复的生命值
+    mod:opt.mod||null,         // 属于哪个模组（him/storm/lucky），模组没开就藏起来
+    potion:opt.potion||null,   // 药水效果：heal/poison/jump/speed/harm/slow
+    hideInCreative:opt.hideInCreative||false,
     maxStack:opt.maxStack||64};
   return id;
 }
@@ -612,6 +845,10 @@ function toolIcon(kind,color){
     }else if(kind==='hoe'){
       P(ctx,-1,-6,2,7,color);P(ctx,-1,-6,2,1,'#ffffff55');
       P(ctx,1,-6,4,2,color);P(ctx,4,-4,2,3,color);P(ctx,4,-4,2,1,dark);
+    }else if(kind==='spear'){ // 长矛：细细的杆+尖尖的头
+      P(ctx,-1,-6,2,1,color); // 矛尖
+      P(ctx,-1.5,-5,3,4,color);P(ctx,-1.5,-5,1.5,4,'#ffffff66'); // 矛头（材料的颜色！）
+      P(ctx,-1,-1,2,10,'#a5824d');P(ctx,-1,-1,1,10,'#c4a26a'); // 细长的矛杆
     }else{ // sword
       P(ctx,-1,-8,2,9,color);P(ctx,-1,-8,1,9,'#ffffff66');
       P(ctx,-1,-9,2,2,color);
@@ -756,7 +993,7 @@ function registerContent(){
     ctx.fillStyle='#b0762a';ctx.fillRect(2,5,12,6);ctx.fillRect(3,4,10,1);ctx.fillRect(3,11,10,1);
     ctx.fillStyle='#d89a48';ctx.fillRect(3,6,10,4);
     ctx.fillStyle='#8a5a1a';ctx.fillRect(4,7,2,2);ctx.fillRect(8,8,2,2);ctx.fillRect(11,6,2,2);
-  },maxStack:64});
+  },maxStack:64,food:3});
   defItem('string','线',{icon:iconString});
   defItem('iron_ingot','铁锭',{icon:iconIngot('#e8e8e8','#9a9a9a')});
   defItem('gold_ingot','金锭',{icon:iconIngot('#ffd94a','#c9a020')});
@@ -818,7 +1055,36 @@ function registerContent(){
   defBlock(B_CHERRY_LOG,'樱花原木',2,{tiles:{top:T.logTop,bottom:T.logTop,side:T.cherrySide},tool:'axe',sound:'wood'});
   defBlock(B_CHERRY_LEAVES,'樱花树叶',0.25,{tiles:{top:T.cherryLeaves,bottom:T.cherryLeaves,side:T.cherryLeaves},drop:0,sound:'grass'});
   defBlock(B_SAPLING,'树苗',0.1,{tiles:{top:T.leaves,bottom:T.leaves,side:T.leaves},drop:I.sapling,sound:'grass',opaque:false,solid:false});
-  for(let b=1;b<=B_ENCHANT;b++)if(b!==B_DOOR_OPEN&&b!==B_BED_HEAD&&b!==B_LAVA&&b!==B_CROPS)blockItemEntry(b);
+  defBlock(B_REDSTONE,'红石粉',0.05,{tiles:{top:T.redstoneDust,bottom:T.empty,side:T.empty},drop:I.redstone,sound:'grass',opaque:false,solid:false});
+  defBlock(B_TNT,'TNT',1,{tiles:{top:T.tntTop,bottom:T.tntTop,side:T.tnt},sound:'wood'}); // 点一下就爆炸！
+  defBlock(B_SUPER_TNT,'超级TNT',1,{tiles:{top:T.tntTop,bottom:T.tntTop,side:T.superTnt},sound:'wood'}); // 更大爆炸
+  defBlock(B_BOMB,'恐怖炸弹',1.5,{tiles:{top:T.tntTop,bottom:T.tntTop,side:T.bomb},sound:'wood'}); // 对付凋零风暴的终极武器
+  defBlock(B_ALTAR,'凋零风暴祭坛',8,{tiles:{top:T.altar,bottom:T.obsidian,side:T.obsidian},tool:'pick',minTier:4,sound:'stone'});
+  defBlock(B_COMMAND,'命令方块',Infinity,{tiles:{top:T.command,bottom:T.command,side:T.command},drop:0,sound:'stone'});
+  defBlock(B_BREW,'酿造台',1.5,{tiles:{top:T.brew,bottom:T.brew,side:T.brew},tool:'pick',minTier:1,sound:'stone'}); // 女巫小屋里有，也能自己合成
+  defBlock(B_IRON_BLOCK,'铁块',5,{tiles:{top:T.ironBlock,bottom:T.ironBlock,side:T.ironBlock},tool:'pick',minTier:1,sound:'stone'});
+  defBlock(B_GOLD_BLOCK,'金块',5,{tiles:{top:T.goldBlock,bottom:T.goldBlock,side:T.goldBlock},tool:'pick',minTier:2,sound:'stone'});
+  defBlock(B_DIAMOND_BLOCK,'钻石块',6,{tiles:{top:T.diamondBlock,bottom:T.diamondBlock,side:T.diamondBlock},tool:'pick',minTier:2,sound:'stone'});
+  defBlock(B_NETHERITE_BLOCK,'下界合金块',15,{tiles:{top:T.netheriteBlock,bottom:T.netheriteBlock,side:T.netheriteBlock},tool:'pick',minTier:4,sound:'stone'});
+  defBlock(B_INFINITY_BLOCK,'无尽贪婪块',20,{tiles:{top:T.infinityBlock,bottom:T.infinityBlock,side:T.infinityBlock},tool:'pick',minTier:4,sound:'stone'});
+  defBlock(B_INFINITY_ORE,'无尽贪婪矿石',12,{tiles:{top:T.infinityOre,bottom:T.infinityOre,side:T.infinityOre},tool:'pick',minTier:4,drop:I.infinity_ingot,sound:'stone'}); // 要用下界合金镐挖
+  defBlock(B_EMERALD_ORE,'绿宝石矿石',6,{tiles:{top:T.emeraldOre,bottom:T.emeraldOre,side:T.emeraldOre},tool:'pick',minTier:2,drop:I.emerald,sound:'stone'}); // 铁镐就能挖
+  defBlock(B_EMERALD_BLOCK,'绿宝石块',6,{tiles:{top:T.emeraldBlock,bottom:T.emeraldBlock,side:T.emeraldBlock},tool:'pick',minTier:2,sound:'stone'});
+  defBlock(B_SCULK,'幽匿方块',1.2,{tiles:{top:T.sculk,bottom:T.sculk,side:T.sculk},sound:'stone'}); // 远古城市的黑地板
+  defBlock(B_CACTUS,'仙人掌',0.6,{tiles:{top:T.cactus,bottom:T.cactus,side:T.cactus},sound:'grass'}); // 🌵 沙漠里的仙人掌
+  defBlock(B_PLATE,'压力板',0.5,{tiles:{top:T.plate,bottom:T.plate,side:T.plate},sound:'stone'}); // ⚠ 沙漠神殿的陷阱：踩上去会爆炸！
+  defBlock(B_PRISM,'海晶石',1.8,{tiles:{top:T.prism,bottom:T.prism,side:T.prism},sound:'stone'}); // 🌊 海底神殿的蓝色石头
+  defBlock(B_LUCKY,'幸运方块',0.8,{tiles:{top:T.lucky,bottom:T.lucky,side:T.lucky},sound:'stone'}); // 🍀 挖掉有惊喜！
+  defBlock(B_LUCKY_SUPER,'超级幸运方块',0.8,{tiles:{top:T.luckySuper,bottom:T.luckySuper,side:T.luckySuper},sound:'stone'}); // ✨ 好运翻倍！
+  defBlock(B_UNLUCKY,'倒霉方块',0.8,{tiles:{top:T.unlucky,bottom:T.unlucky,side:T.unlucky},sound:'stone'}); // 💀 千万别挖……吧？
+  defBlock(B_LUCKY_DIAMOND,'钻石幸运方块',0.8,{tiles:{top:T.luckyDiamond,bottom:T.luckyDiamond,side:T.luckyDiamond},sound:'stone'}); // 💎 几乎都是传说装备！
+  defBlock(B_LUCKY_RAINBOW,'彩虹幸运方块',0.8,{tiles:{top:T.luckyRainbow,bottom:T.luckyRainbow,side:T.luckyRainbow},sound:'stone'}); // 🌈 一次抽两回！
+  defBlock(B_LUCKY_TNT,'炸弹幸运方块',0.8,{tiles:{top:T.luckyTnt,bottom:T.luckyTnt,side:T.luckyTnt},sound:'stone'}); // 🧨 轰！快跑！
+  defBlock(B_LUCKY_MOB,'生物幸运方块',0.8,{tiles:{top:T.luckyMob,bottom:T.luckyMob,side:T.luckyMob},sound:'stone'}); // 👾 会蹦出好多生物！
+  for(let b=1;b<=B_LUCKY_MOB;b++)if(b!==B_DOOR_OPEN&&b!==B_BED_HEAD&&b!==B_LAVA&&b!==B_CROPS&&b!==B_REDSTONE&&b!==B_COMMAND)blockItemEntry(b);
+  blockItemEntry(B_SAPLING); // 树苗（id 75 在循环范围外，单独注册）
+  for(const lb of [B_LUCKY,B_LUCKY_SUPER,B_UNLUCKY,B_LUCKY_DIAMOND,B_LUCKY_RAINBOW,B_LUCKY_TNT,B_LUCKY_MOB])ITEMS[lb].mod='lucky'; // 幸运方块是模组内容
+  ITEMS[B_ALTAR].mod='storm';ITEMS[B_BOMB].mod='storm'; // 模组物品：开了模组才出现在创造库
 
   // 工具: 镐/斧/剑 × 木/石/铁/金/钻石
   const toolMats=[
@@ -846,7 +1112,9 @@ function registerContent(){
     ['iron','铁',I.iron_ingot,[2,6,5,2]],
     ['gold','金',I.gold_ingot,[2,5,3,1]],
     ['diamond','钻石',I.diamond,[3,8,6,3]],
-    ['netherite','下界合金',I.netherite_ingot,[4,9,7,4]]];
+    ['netherite','下界合金',I.netherite_ingot,[4,9,7,4]],
+    ['infinity','无尽贪婪',I.infinity_ingot,[8,12,10,8]], // 全套穿上：打十下只掉一点点血
+    ['god','创世',I.god_core,[12,16,14,12]]]; // HIM模组：全套穿上几乎不掉血！
   const slotNames=['头盔','胸甲','护腿','靴子'];
   const slotKinds=['helmet','chest','legs','boots'];
   for(const m of armorMats){
@@ -856,6 +1124,162 @@ function registerContent(){
     }
   }
   defItem('turtle_helmet','海龟壳',{icon:armorIcon('helmet',MAT_COLOR.turtle),type:'armor',armorSlot:0,armorPts:2,mat:'turtle',maxStack:1});
+  for(const k of ['helmet','chest','legs','boots'])ITEMS[I['god_'+k]].mod='him'; // 创世盔甲是HIM模组内容
+  // ---------- 分支融合新增物品（无尽贪婪/创世/风暴/药水/长矛/枪械，id 顺延保证存档兼容） ----------
+  defItem('infinity_ingot','无尽贪婪锭',{icon:iconIngot('#c576f0','#7a3fb0')}); // 无尽贪婪：紫色的传说材料
+  defItem('carrot','胡萝卜',{icon:ctx=>{
+    ctx.fillStyle='#ff8a2a';ctx.fillRect(6,4,4,9);
+    ctx.fillStyle='#e07020';ctx.fillRect(6,4,1,9);ctx.fillRect(9,4,1,9);
+    ctx.fillStyle='#3a9a2a';ctx.fillRect(7,1,1,3);ctx.fillRect(9,2,1,2);
+  },maxStack:64,food:2});
+  defItem('potato','土豆',{icon:ctx=>{
+    ctx.fillStyle='#d8b860';ctx.fillRect(5,5,6,7);
+    ctx.fillStyle='#c0a048';ctx.fillRect(5,5,1,7);ctx.fillRect(10,5,1,7);
+    ctx.fillStyle='#8a7a3a';ctx.fillRect(7,7,1,1);ctx.fillRect(8,9,1,1);
+  },maxStack:64,food:2});
+  defItem('emerald','绿宝石',{icon:ctx=>{
+    ctx.fillStyle='#2ad84a';
+    ctx.fillRect(5,3,6,2);ctx.fillRect(4,5,8,4);ctx.fillRect(5,9,6,2);ctx.fillRect(6,11,4,1);
+    ctx.fillStyle='#8affa8';ctx.fillRect(5,4,2,2);
+    ctx.fillStyle='#1a8a2a';ctx.fillRect(9,7,2,3);
+  }});
+  defItem('blaze_powder','冶炼粉',{icon:ctx=>{ // 下界挖出来的金红色粉末
+    ctx.fillStyle='#ff9a3a';ctx.fillRect(4,9,8,3);
+    ctx.fillStyle='#ffc86a';ctx.fillRect(5,8,3,1);ctx.fillRect(9,8,2,1);
+    ctx.fillStyle='#e06018';ctx.fillRect(4,12,8,1);
+  }});
+  defItem('bullet','子弹',{icon:ctx=>{ // 黄头小子弹
+    ctx.fillStyle='#ffd94a';ctx.fillRect(6,2,4,5);
+    ctx.fillStyle='#c9a830';ctx.fillRect(6,2,1,5);
+    ctx.fillStyle='#b08a3a';ctx.fillRect(5,7,6,5);
+    ctx.fillStyle='#8a6a2a';ctx.fillRect(5,12,6,2);
+  }});
+  defItem('bucket','铁桶',{icon:ctx=>{
+    ctx.fillStyle='#3a3a3a';ctx.fillRect(5,5,6,8);
+    ctx.fillStyle='#5a5a5a';ctx.fillRect(6,5,1,8);
+    ctx.fillStyle='#8a8a8a';ctx.fillRect(5,5,6,1);
+    ctx.strokeStyle='#3a3a3a';ctx.beginPath();ctx.arc(8,5,3,Math.PI,0);ctx.stroke();
+  },maxStack:1});
+  defItem('water_bucket','水桶',{icon:ctx=>{
+    ctx.fillStyle='#3a3a3a';ctx.fillRect(5,5,6,8);
+    ctx.fillStyle='#3a7bd5';ctx.fillRect(6,6,4,2);
+    ctx.fillStyle='#6aa8e8';ctx.fillRect(7,6,2,1);
+    ctx.strokeStyle='#3a3a3a';ctx.beginPath();ctx.arc(8,5,3,Math.PI,0);ctx.stroke();
+  },maxStack:1});
+  defItem('infinity_bucket','无尽贪婪桶',{icon:ctx=>{
+    ctx.fillStyle='#b46ae8';ctx.fillRect(5,5,6,8);
+    ctx.fillStyle='#d8a0ff';ctx.fillRect(6,5,1,8);
+    ctx.fillStyle='#e8c8ff';ctx.fillRect(5,5,6,1);
+    ctx.strokeStyle='#b46ae8';ctx.beginPath();ctx.arc(8,5,3,Math.PI,0);ctx.stroke();
+  },maxStack:1});
+  defItem('infinity_water_bucket','无尽贪婪水桶',{icon:ctx=>{
+    ctx.fillStyle='#b46ae8';ctx.fillRect(5,5,6,8);
+    ctx.fillStyle='#3a7bd5';ctx.fillRect(6,6,4,2);
+    ctx.fillStyle='#8ac8ff';ctx.fillRect(7,6,2,1);
+    ctx.strokeStyle='#b46ae8';ctx.beginPath();ctx.arc(8,5,3,Math.PI,0);ctx.stroke();
+  },maxStack:1}); // 永远倒不完！
+  defItem('infinity_bow','无尽贪婪弓',{icon:ctx=>{ // 紫色弯弓+发光白弦
+    ctx.strokeStyle='#c576f0';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(5,8,6,-1.1,1.1);ctx.stroke();
+    ctx.strokeStyle='#ffffff';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(8,3);ctx.lineTo(8,13);ctx.stroke();
+  },type:'tool',toolType:'bow',dmg:8,maxStack:1});
+  defItem('gun_pistol','手枪',{icon:ctx=>{ // 黑灰色小手枪
+    ctx.fillStyle='#3a3a3a';ctx.fillRect(3,6,10,3);
+    ctx.fillStyle='#555';ctx.fillRect(3,6,10,1);
+    ctx.fillStyle='#2a2a2a';ctx.fillRect(4,9,3,4);
+    ctx.fillStyle='#8a8a8a';ctx.fillRect(12,7,1,2);
+  },type:'gun2',maxStack:1}); // 生存模式枪械：射击走 fork 的 gunConf 弹道系统
+  defItem('gun_rifle','步枪',{icon:ctx=>{ // 长长的步枪
+    ctx.fillStyle='#4a3a2a';ctx.fillRect(2,7,12,2);
+    ctx.fillStyle='#3a3a3a';ctx.fillRect(4,5,7,2);
+    ctx.fillStyle='#2a2a2a';ctx.fillRect(5,9,2,4);
+  },type:'gun2',maxStack:1});
+  defItem('gun_shotgun','霰弹枪',{icon:ctx=>{ // 双管霰弹枪，一打一大片
+    ctx.fillStyle='#3a3a3a';ctx.fillRect(2,6,11,2);ctx.fillRect(2,8,11,2);
+    ctx.fillStyle='#5a4a3a';ctx.fillRect(2,6,3,4);
+    ctx.fillStyle='#6a5a3a';ctx.fillRect(11,9,3,3);
+  },type:'gun2',maxStack:1});
+  defItem('gun_sniper','狙击枪',{icon:ctx=>{ // 带瞄准镜的长枪，超远超痛
+    ctx.fillStyle='#2a3a2a';ctx.fillRect(1,7,14,2);
+    ctx.fillStyle='#3a3a3a';ctx.fillRect(3,5,2,2);
+    ctx.fillStyle='#111';ctx.fillRect(5,4,4,2);
+    ctx.fillStyle='#4a3a2a';ctx.fillRect(12,9,3,2);
+  },type:'gun2',maxStack:1});
+  defItem('gun_mg','机关枪',{icon:ctx=>{ // 一次三发子弹
+    ctx.fillStyle='#3a3a3a';ctx.fillRect(1,6,13,3);
+    ctx.fillStyle='#555';ctx.fillRect(1,6,13,1);
+    ctx.fillStyle='#2a2a2a';ctx.fillRect(5,9,2,4);ctx.fillRect(9,9,2,4);
+    ctx.fillStyle='#8a8a8a';ctx.fillRect(2,9,1,3);
+  },type:'gun2',maxStack:1});
+  defItem('gun_infinity','无尽贪婪枪',{icon:ctx=>{ // 紫色传说枪，不用子弹！
+    ctx.fillStyle='#b46ae8';ctx.fillRect(1,6,13,3);
+    ctx.fillStyle='#d8a0ff';ctx.fillRect(1,6,13,1);
+    ctx.fillStyle='#8a3fd0';ctx.fillRect(4,9,2,4);
+    ctx.fillStyle='#ffd94a';ctx.fillRect(12,7,2,1);
+  },type:'gun2',maxStack:1});
+  defItem('him_egg','HIM刷怪蛋',{icon:ctx=>{ // 白眼睛的蛋，有点吓人
+    ctx.fillStyle='#2a2a2a';ctx.fillRect(5,3,6,10);
+    ctx.fillStyle='#1a1a1a';ctx.fillRect(5,3,1,10);ctx.fillRect(10,3,1,10);
+    ctx.fillStyle='#fff';ctx.fillRect(6,6,2,2);ctx.fillRect(9,6,2,2);
+    ctx.fillStyle='#e8e8ff';ctx.fillRect(6,6,1,1);ctx.fillRect(9,6,1,1);
+  },mod:'him',maxStack:16});
+  defItem('god_core','创世之核',{icon:ctx=>{ // 打败HIM掉的白金色核心
+    ctx.fillStyle='#ffe8a0';
+    ctx.fillRect(6,2,4,3);ctx.fillRect(4,5,8,6);ctx.fillRect(6,11,4,3);
+    ctx.fillStyle='#fff';ctx.fillRect(6,5,2,2);
+    ctx.fillStyle='#d8b860';ctx.fillRect(9,8,2,3);
+  },mod:'him'});
+  defItem('god_sword','创世之剑',{icon:toolIcon('sword','#ffe8a0'),type:'tool',toolType:'sword',speed:1,tier:5,dmg:25,maxStack:1,mod:'him'}); // 比无尽贪婪还厉害！
+  defItem('command_book','命令方块之书',{icon:ctx=>{ // 橙色封面小书
+    ctx.fillStyle='#c97030';ctx.fillRect(4,3,8,10);
+    ctx.fillStyle='#e89050';ctx.fillRect(4,3,2,10);
+    ctx.fillStyle='#ffd94a';ctx.fillRect(7,6,3,3);
+    ctx.fillStyle='#7a4a20';ctx.fillRect(12,4,1,8);
+  },mod:'storm'});
+  defItem('storm_heart','风暴之心',{icon:ctx=>{ // 紫色旋风核心
+    ctx.fillStyle='#7a4ae8';
+    ctx.fillRect(6,3,4,10);ctx.fillRect(4,5,8,6);
+    ctx.fillStyle='#a07aff';ctx.fillRect(6,3,2,3);
+    ctx.fillStyle='#e0d0ff';ctx.fillRect(7,6,2,2);
+  },mod:'storm'});
+  defItem('storm_sword','风暴之剑',{icon:toolIcon('sword','#7a4ae8'),type:'tool',toolType:'sword',speed:1,tier:5,dmg:22,maxStack:1,mod:'storm'});
+  function iconPotion(color,foam){return ctx=>{
+    ctx.fillStyle='rgba(220,230,255,0.9)';ctx.fillRect(5,3,6,10); // 玻璃瓶
+    ctx.fillStyle=color;ctx.fillRect(6,6,4,6); // 药水
+    ctx.fillStyle=foam||'#ffffff';ctx.fillRect(6,6,4,1); // 泡泡
+    ctx.fillStyle='#8a6a4a';ctx.fillRect(6,1,4,2); // 软木塞
+  };}
+  defItem('potion_heal','治疗药水',{icon:iconPotion('#ff5a7a'),maxStack:16,potion:'heal'}); // 喝一口回血
+  defItem('potion_poison','毒药',{icon:iconPotion('#4ac94a','#b0ffb0'),maxStack:16,potion:'poison'}); // 泼出去毒倒怪物
+  defItem('potion_jump','跳跃药水',{icon:iconPotion('#7ae8e8'),maxStack:16,potion:'jump'}); // 60秒跳超高
+  defItem('potion_speed','速度药水',{icon:iconPotion('#5a9aff'),maxStack:16,potion:'speed'}); // 60秒跑超快
+  defItem('potion_harm','伤害药水',{icon:iconPotion('#8a2a8a','#d0a0ff'),maxStack:16,potion:'harm'}); // 泼出去炸伤怪物
+  defItem('potion_slowfall','缓降药水',{icon:iconPotion('#f0e8d0','#ffffff'),maxStack:16,potion:'slow'}); // 60秒慢慢飘，摔不伤
+  defItem('infinity_sword','无尽贪婪剑',{icon:toolIcon('sword','#b46ae8'),type:'tool',toolType:'sword',speed:1,tier:5,dmg:15,maxStack:1}); // 打怪会天降剑雨！
+  defItem('dragon_egg_sword','龙蛋之剑',{icon:toolIcon('sword','#3a2a5e'),type:'tool',toolType:'sword',speed:1,tier:5,dmg:20,maxStack:1}); // 打怪会天上掉龙蛋砸怪！
+  defItem('cosmos_sword','寰宇支配之剑',{icon:ctx=>{ // 黑色剑身+绿色点点，像星空一样
+    ctx.fillStyle='#1a1a2a';ctx.fillRect(7,1,2,9);
+    ctx.fillStyle='#0a0a14';ctx.fillRect(7,1,1,9);
+    ctx.fillStyle='#7dff9a';ctx.fillRect(7,3,1,1);ctx.fillRect(8,6,1,1);ctx.fillRect(7,8,1,1);
+    ctx.fillStyle='#3a3a4a';ctx.fillRect(5,10,6,1);ctx.fillRect(6,11,4,2);
+    ctx.fillStyle='#8a6a3a';ctx.fillRect(7,13,2,2);
+  },type:'tool',toolType:'sword',speed:1,tier:5,dmg:18,maxStack:1});
+  defItem('infinity_shovel','无尽贪婪铲子',{icon:toolIcon('shovel','#b46ae8'),type:'tool',toolType:'shovel',speed:14,tier:6,dmg:4,maxStack:1});
+  defItem('infinity_hoe','无尽贪婪锄头',{icon:toolIcon('hoe','#b46ae8'),type:'tool',toolType:'hoe',speed:2,tier:6,dmg:4,maxStack:1});
+  defItem('infinity_axe','无尽贪婪斧子',{icon:toolIcon('axe','#b46ae8'),type:'tool',toolType:'axe',speed:14,tier:6,dmg:6,maxStack:1});
+  defItem('infinity_pickaxe','无尽贪婪镐子',{icon:toolIcon('pick','#b46ae8'),type:'tool',toolType:'pick',speed:16,tier:6,dmg:5,maxStack:1}); // 一次挖一大片！
+  defItem('wood_spear','木矛',{icon:toolIcon('spear','#a5824d'),type:'tool',toolType:'spear',speed:1,tier:1,dmg:3,maxStack:1});
+  defItem('stone_spear','石矛',{icon:toolIcon('spear','#8a8a8a'),type:'tool',toolType:'spear',speed:1,tier:2,dmg:4,maxStack:1});
+  defItem('iron_spear','铁矛',{icon:toolIcon('spear','#e8e8e8'),type:'tool',toolType:'spear',speed:1,tier:3,dmg:5,maxStack:1});
+  defItem('gold_spear','金矛',{icon:toolIcon('spear','#ffd94a'),type:'tool',toolType:'spear',speed:1,tier:2,dmg:4,maxStack:1});
+  defItem('diamond_spear','钻石矛',{icon:toolIcon('spear','#5ad8d8'),type:'tool',toolType:'spear',speed:1,tier:4,dmg:6,maxStack:1});
+  defItem('netherite_spear','下界合金矛',{icon:toolIcon('spear','#574b5e'),type:'tool',toolType:'spear',speed:1,tier:5,dmg:7,maxStack:1});
+  defItem('infinity_spear','无尽贪婪矛',{icon:toolIcon('spear','#b46ae8'),type:'tool',toolType:'spear',speed:1,tier:6,dmg:10,maxStack:1});
+  // 面包改为食物系统（保留物品，加 food 属性）
+  if(ITEMS[I.bread])ITEMS[I.bread].food=3;
+  if(ITEMS[I.wheat])ITEMS[I.wheat].food=1;
+  if(ITEMS[I.rotten_flesh])ITEMS[I.rotten_flesh].food=-2; // 腐肉：吃了掉血
 }
 
 // ---------------- 合成配方 ----------------
@@ -940,6 +1364,54 @@ function buildRecipes(){
   addShapeless({[B_COBBLE]:4},B_DIRT,2,'skyblock');   // 4 圆石 → 2 泥土（"碎石风化"）
   addShapeless({[B_DIRT]:2,[B_COBBLE]:2},B_STONE,2,'skyblock'); // 2 泥土+2 圆石 → 2 石头
   addShapeless({[B_LEAVES]:4},I.sapling,1,'skyblock'); // 4 树叶 → 1 树苗（兜底，树叶掉落不够时）
+  // ---------- 分支融合新增配方 ----------
+  addShapeless({[I.iron_ingot]:1,[I.redstone]:1},I.bullet,16); // 铁锭+红石=16颗子弹
+  addShapeless({[I.iron_ingot]:3,[I.redstone]:1,[B_PLANKS]:1},I.gun_pistol,1); // 3铁锭+1红石+1木板=手枪
+  addShapeless({[I.iron_ingot]:5,[I.redstone]:2},I.gun_rifle,1); // 5铁锭+2红石=步枪（要在工作台做）
+  addShapeless({[I.iron_ingot]:4,[B_PLANKS]:2,[I.redstone]:1},I.gun_shotgun,1); // 4铁锭+2木板+1红石=霰弹枪
+  addShapeless({[I.iron_ingot]:5,[B_GLASS]:1,[I.redstone]:2},I.gun_sniper,1); // 5铁锭+1玻璃+2红石=狙击枪
+  addShapeless({[I.iron_ingot]:6,[I.redstone]:3},I.gun_mg,1); // 6铁锭+3红石=机关枪（摆满工作台）
+  addShapeless({[I.infinity_ingot]:2,[I.iron_ingot]:3,[I.redstone]:2},I.gun_infinity,1); // 2无尽贪婪锭+3铁锭+2红石=无尽贪婪枪
+  addShapeless({[B_SAND]:2,[I.redstone]:2},B_TNT,1); // 2沙子+2红石=TNT
+  addShapeless({[B_TNT]:1,[I.blaze_powder]:4},B_SUPER_TNT,1); // TNT+4冶炼粉=超级TNT
+  addShapeless({[B_SUPER_TNT]:1,[B_TNT]:4,[I.command_book]:1},B_BOMB,1); // 超级TNT+4TNT+命令方块之书=恐怖炸弹
+  addShapeless({[B_OBSIDIAN]:4,[I.diamond]:1,[I.ender_pearl]:2},B_ALTAR,1); // 4黑曜石+1钻石+2末影珍珠=凋零风暴祭坛
+  addShapeless({[I.rotten_flesh]:2,[B_OBSIDIAN]:2,[I.ender_pearl]:1},I.him_egg,1); // 腐肉+黑曜石+珍珠=HIM刷怪蛋
+  addShapeless({[I.storm_heart]:1,[I.stick]:2},I.storm_sword,1); // 风暴之心+2木棍=风暴之剑
+  addShapeless({[B_COBBLE]:3,[I.iron_ingot]:1,[I.redstone]:1},B_BREW,1); // 3圆石+1铁锭+1红石=酿造台
+  addShaped(['I I',' I '],{I:I.iron_ingot},I.bucket,1); // 3 铁锭做铁桶
+  addShaped(['I I',' I '],{I:I.infinity_ingot},I.infinity_bucket,1); // 3 无尽贪婪锭做无尽贪婪桶
+  addShaped([' TS','T S',' TS'],{T:I.infinity_ingot,S:I.string},I.infinity_bow,1); // 3无尽贪婪锭+3线=无尽贪婪弓
+  addShapeless({[I.diamond]:1,[I.netherite_ingot]:1,[I.gold_ingot]:1,[I.iron_ingot]:1},I.infinity_ingot,1); // 四种宝贝炼成一颗
+  addShaped(['M','M','S'],{M:I.infinity_ingot,S:I.stick},I.infinity_sword,1); // 无尽贪婪剑：打怪天降剑雨
+  addShaped(['E','M','S'],{E:I.dragon_egg,M:I.infinity_ingot,S:I.stick},I.dragon_egg_sword,1); // 龙蛋+无尽贪婪锭=龙蛋之剑
+  addShaped(['M','S','S'],{M:I.infinity_ingot,S:I.stick},I.infinity_shovel,1); // 铲子：1锭+2棍
+  addShaped(['  M',' S ','S  '],{M:I.infinity_ingot,S:I.stick},I.infinity_spear,1); // 🔱 无尽贪婪矛
+  addShaped(['MMM',' S ',' S '],{M:I.infinity_ingot,S:I.stick},I.infinity_pickaxe,1);
+  addShaped(['MM',' S',' S'],{M:I.infinity_ingot,S:I.stick},I.infinity_hoe,1); // 锄头：2锭+2棍
+  addShaped(['MM','MS',' S'],{M:I.infinity_ingot,S:I.stick},I.infinity_axe,1); // 斧子：3锭+2棍
+  addShaped([' B ','EBE',' S '],{B:B_INFINITY_BLOCK,E:I.dragon_egg,S:I.stick},I.cosmos_sword,1); // 2无尽贪婪块+龙蛋=寰宇支配之剑
+  addShaped(['GGG','GRG','GGG'],{G:I.gold_ingot,R:I.redstone},B_LUCKY,1); // 金锭围红石
+  addShaped(['GGG','GLG','GGG'],{G:B_GOLD_BLOCK,L:B_LUCKY},B_LUCKY_SUPER,1); // 金块围幸运方块
+  addShapeless({[B_LUCKY]:1,[I.rotten_flesh]:1},B_UNLUCKY,1); // 幸运方块+腐肉=倒霉方块
+  addShaped(['DDD','DLD','DDD'],{D:I.diamond,L:B_LUCKY},B_LUCKY_DIAMOND,1); // 💎 钻石围一圈幸运方块
+  addShapeless({[B_LUCKY]:1,[I.emerald]:1,[I.redstone]:1,[I.slimeball]:1},B_LUCKY_RAINBOW,1); // 🌈 彩虹材料大杂烩
+  addShapeless({[B_LUCKY]:1,[B_TNT]:1},B_LUCKY_TNT,1); // 🧨 幸运方块+TNT
+  addShapeless({[B_LUCKY]:1,[I.rotten_flesh]:1,[I.slimeball]:1},B_LUCKY_MOB,1); // 👾 幸运方块+腐肉+黏液球
+  // 长矛：材料+2棍斜着摆（全材质）
+  for(const tm of [['wood',B_PLANKS],['stone',B_COBBLE],['iron',I.iron_ingot],['gold',I.gold_ingot],['diamond',I.diamond],['netherite',I.netherite_ingot]])
+    addShaped(['  M',' S ','S  '],{M:tm[1],S:I.stick},I[tm[0]+'_spear'],1);
+  // 金属块：3x3 材料压缩/解压
+  for(const bp of [[I.iron_ingot,B_IRON_BLOCK],[I.gold_ingot,B_GOLD_BLOCK],[I.diamond,B_DIAMOND_BLOCK],[I.netherite_ingot,B_NETHERITE_BLOCK],[I.infinity_ingot,B_INFINITY_BLOCK],[I.emerald,B_EMERALD_BLOCK]]){
+    addShaped(['MMM','MMM','MMM'],{M:bp[0]},bp[1],1);
+    addShapeless({[bp[1]]:1},bp[0],9);
+  }
+  // 无尽贪婪盔甲（用 infinity_ingot 直接做）
+  {
+    const pats={helmet:['MMM','M M'],chest:['M M','MMM','MMM'],legs:['MMM','M M','M M'],boots:['M M','M M']};
+    const kinds=['helmet','chest','legs','boots'];
+    for(const k of kinds)addShaped(pats[k],{M:I.infinity_ingot},I['infinity_'+k],1);
+  }
 }
 // 熔炉烧炼表
 const SMELT={};

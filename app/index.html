@@ -160,6 +160,42 @@
   <div id="enchHotbar" class="grid g9"></div>
 </div>
 
+<!-- 酿造台面板 -->
+<div id="brewPanel" class="panel hidden" style="z-index:150;max-height:92vh;overflow-y:auto">
+  <button class="closeX" data-close="brewPanel">×</button>
+  <h3>🧪 酿造台</h3>
+  <div class="hint">选一种药水，材料够了点按钮就能做出来！</div>
+  <div id="brewList" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+</div>
+
+<!-- 村民交易面板 -->
+<div id="tradePanel" class="panel hidden">
+  <button class="closeX" data-close="tradePanel">×</button>
+  <h3>🛒 村民交易</h3>
+  <div class="hint">绿宝石 💚 是货币：卖粮食换绿宝石，再用绿宝石买好东西！</div>
+  <div id="tradeList"></div>
+</div>
+
+<!-- 模组选择面板 -->
+<div id="modPanel" class="panel hidden" style="z-index:150">
+  <button class="closeX" data-close="modPanel">×</button>
+  <h3>🧩 模组选择</h3>
+  <div class="hint">点一下就能开关模组，选好了再去开始游戏！<br>模组开了以后，创造物品库里就有模组的东西啦 ✨</div>
+  <div class="mod-row" data-mod="him">
+    <span class="mod-check">✅</span>
+    <span><b>👁 HIM模组</b><br><span class="mod-desc">HIM刷怪蛋：放出白眼大魔王！他会用⚡闪电、🗻黑曜石尖刺打你，还会瞬移！打败他掉<b>创世装备</b>（比无尽贪婪还厉害）</span></span>
+  </div>
+  <div class="mod-row" data-mod="storm">
+    <span class="mod-check">✅</span>
+    <span><b>🌪 凋零风暴模组</b><br><span class="mod-desc">合成祭坛召唤凋零风暴！它会吞方块变大，还会放共生体。合成💣恐怖炸弹炸开它，钻进身体打掉命令方块就能赢，得到💜风暴之心！</span></span>
+  </div>
+  <div class="mod-row" data-mod="lucky">
+    <span class="mod-check">✅</span>
+    <span><b>🍀 幸运方块模组</b><br><span class="mod-desc">三种幸运方块：🍀幸运方块、✨超级幸运方块、💀倒霉方块！挖掉可能掉<b>超级装备</b>、变出小房子，也可能被⚡闪电劈、被TNT炸！</span></span>
+  </div>
+  <button class="pk-diff pk-easy" id="modConfirmBtn" style="margin-top:10px;font-size:18px">✔ 确认，开始游戏！</button>
+</div>
+
 <!-- 联机大厅面板（公开房间，无需邀请码） -->
 <div id="mpPanel" class="panel hidden" style="z-index:150;max-height:92vh;overflow-y:auto">
   <button class="closeX" data-close="mpPanel">×</button>
@@ -261,6 +297,7 @@
   <button id="skyBlockBtn" class="mcbtn mcbtn-teal">🏝️ 空岛模式</button>
   <button id="parkourBtn" class="mcbtn mcbtn-orange">🏃 跑酷模式</button>
   <button id="shooterBtn" class="mcbtn mcbtn-red">🔫 枪战模式</button>
+  <button id="modBtn" class="mcbtn" style="background:linear-gradient(#5a6ae8,#3a3ab0)">🧩 模组选择（HIM · 凋零风暴 · 幸运方块）</button>
   <button id="mpBtn" class="mcbtn mcbtn-green">🌐 联机大厅</button>
   <button id="helpBtn" class="mcbtn mcbtn-sm mcbtn-gray" style="min-width:150px">📖 操作帮助</button>
   <div id="help" class="help hidden">

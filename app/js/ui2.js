@@ -512,9 +512,11 @@ const SURVIVAL_TASKS=[
   {t:'在附魔台给装备附魔一次 ✨',c:()=>enchantedOnce},
   {t:'找到一个村庄 🏠',c:()=>foundVillage},
   {t:'打败铁傀儡，拿到铁锭 💪',c:()=>golemKilled},
+  {t:'挖到绿宝石，跟村民换个好吃的 💚',c:()=>tradedWithVillager},
   {t:'扔末影珍珠传送一次！',c:()=>usedPearl},
   {t:'做一把弓 🏹（3木棍+3线）',c:()=>hasItem(I.bow)},
   {t:'打碎一个末影水晶 💥（不然龙会回血）',c:()=>crystalsBroken>0},
+  {t:'做出一件无尽贪婪装备 💜（打末影龙也能掉无尽贪婪锭）',c:()=>hasAny([I.infinity_sword,I.infinity_helmet,I.infinity_chest,I.infinity_legs,I.infinity_boots,I.dragon_egg_sword,I.infinity_shovel,I.infinity_hoe,I.infinity_axe,I.cosmos_sword,I.infinity_bucket,I.infinity_bow,I.infinity_spear,I.gun_infinity])},
   {t:'打败末影龙！🐉 拿到龙蛋',c:()=>dragonKilled}
 ];
 let TASKS=SURVIVAL_TASKS; // 当前任务链（生存 / 空岛模式切换）
@@ -596,30 +598,7 @@ function buildPanels(){
   fillGrid($('enchInvGrid'),'store',27);
   fillGrid($('enchHotbar'),'hot',9);
   $('btnDoEnch').addEventListener('click',()=>doEnchant());
-  // 创造物品库：每种物品一格，点击拿一整组
-  const cgr=$('creativeGrid');
-  const giveItem=id=>{
-    cursor={id:id,count:maxStackOf(id)};
-    sfx.pickup();refreshAll();
-  };
-  for(const id in ITEMS){
-    const it=ITEMS[id];
-    if(!it||!it.name)continue;
-    const el=document.createElement('div');
-    el.className='slot';el.title=it.name;
-    const cv=document.createElement('canvas');cv.width=16;cv.height=16;
-    drawItemIcon(cv.getContext('2d'),it.id);
-    el.appendChild(cv);
-    el.addEventListener('click',()=>giveItem(it.id));
-    // 触屏：轻点=拿取；滑动=滚动列表（不在 touchstart 拦截，不然滑不动）
-    let tsx=0,tsy=0;
-    el.addEventListener('touchstart',e=>{const t=e.changedTouches[0];tsx=t.clientX;tsy=t.clientY;},{passive:true});
-    el.addEventListener('touchend',e=>{
-      const t=e.changedTouches[0];
-      if(Math.hypot(t.clientX-tsx,t.clientY-tsy)<12){e.preventDefault();giveItem(it.id);}
-    },{passive:false});
-    cgr.appendChild(el);
-  }
+  rebuildCreativeGrid(); // 创造物品库（开关模组后会重建）
   // 背包内皮肤切换
   const updSkin2=()=>{$('skinName2').textContent=curSkin().name;};
   $('skinPrev2').addEventListener('click',()=>{skinIdx=((skinIdx-1)%SKINS.length+SKINS.length)%SKINS.length;updSkin2();drawPaperDoll();});
@@ -717,7 +696,11 @@ function runCommand(){
     hghast:'hghast',ghast:'hghast',快乐恶魂:'hghast',恶魂:'hghast',creaking:'creaking',嘎吱怪:'creaking',
     zombie:'zombie',僵尸:'zombie',slime:'slime',史莱姆:'slime',enderman:'enderman',末影人:'enderman',小黑:'enderman',
     dragon:'dragon',末影龙:'dragon',龙:'dragon',villager:'villager',村民:'villager',
-    golem:'golem',铁傀儡:'golem',铁人:'golem'};
+    golem:'golem',铁傀儡:'golem',铁人:'golem',
+    pig:'pig',猪:'pig',小猪:'pig',sheep:'sheep',羊:'sheep',小羊:'sheep',绵羊:'sheep',
+    chicken:'chicken',鸡:'chicken',小鸡:'chicken',spider:'spider',蜘蛛:'spider',
+    skeleton:'skeleton',骷髅:'skeleton',小白:'skeleton',creeper:'creeper',苦力怕:'creeper',爬行者:'creeper',
+    warden:'warden',坚守者:'warden',监守者:'warden',guardian:'guardian',守卫者:'guardian'};
   if(cmd.indexOf('summon ')===0||cmd.indexOf('生成 ')===0){
     const name=cmd.replace(/^summon |^生成 /,'').trim();
     const mt=MOB_NAMES[name];
@@ -728,6 +711,19 @@ function runCommand(){
     spawnMob(mt,sx,sz,sy);
     showToast('✨ 生成了一只'+name+'！');
     closeAllPanels();return;
+  }
+  // 结构定位指令：/城市 /神殿 /矿洞 /海殿
+  if(cmd==='city'||cmd==='城市'||cmd==='远古城市'||cmd==='古城'){
+    showToast(cityHint());closeAllPanels();return;
+  }
+  if(cmd==='神殿'||cmd==='沙漠神殿'||cmd==='temple'){
+    showToast(templeHint());closeAllPanels();return;
+  }
+  if(cmd==='矿洞'||cmd==='矿'||cmd==='mine'){
+    showToast(mineHint());closeAllPanels();return;
+  }
+  if(cmd==='海底神殿'||cmd==='海殿'||cmd==='monument'){
+    showToast(monumentHint());closeAllPanels();return;
   }
   // /time day|night 调时间（管理员）
   if(cmd==='time day'||cmd==='白天'){dayTime=0.35;showToast('☀️ 天亮了！');closeAllPanels();return;}
@@ -809,3 +805,89 @@ function closeAllPanels(){
   }
 }
 
+// ---------------- 🛒 村民交易（绿宝石经济） ----------------
+const TRADES=[
+  {g:'buy', give:{id:()=>I.emerald,n:1}, get:{id:()=>I.bread,n:3}},
+  {g:'buy', give:{id:()=>I.emerald,n:1}, get:{id:()=>I.carrot,n:4}},
+  {g:'buy', give:{id:()=>I.emerald,n:1}, get:{id:()=>I.potato,n:4}},
+  {g:'buy', give:{id:()=>I.emerald,n:3}, get:{id:()=>I.diamond,n:1}},
+  {g:'buy', give:{id:()=>I.emerald,n:5}, get:{id:()=>I.diamond_sword,n:1}},
+  {g:'buy', give:{id:()=>I.emerald,n:6}, get:{id:()=>I.diamond_helmet,n:1}},
+  {g:'buy', give:{id:()=>I.emerald,n:8}, get:{id:()=>I.diamond_chest,n:1}},
+  {g:'buy', give:{id:()=>I.emerald,n:15}, get:{id:()=>I.infinity_ingot,n:1}},
+  {g:'buy', give:{id:()=>I.emerald,n:40}, get:{id:()=>B_INFINITY_BLOCK,n:1}},
+  {g:'sell', give:{id:()=>I.wheat,n:4}, get:{id:()=>I.emerald,n:1}},
+  {g:'sell', give:{id:()=>I.rotten_flesh,n:8}, get:{id:()=>I.emerald,n:1}},
+  {g:'sell', give:{id:()=>I.leather,n:3}, get:{id:()=>I.emerald,n:1}},
+  {g:'sell', give:{id:()=>B_COBBLE,n:16}, get:{id:()=>I.emerald,n:1}},
+  {g:'sell', give:{id:()=>I.iron_ingot,n:2}, get:{id:()=>I.emerald,n:1}},
+  {g:'sell', give:{id:()=>I.slimeball,n:4}, get:{id:()=>I.emerald,n:1}},
+];
+function openTrade(){
+  openPanel('tradePanel');
+  renderTrade();
+}
+function renderTrade(){
+  const list=$('tradeList');
+  list.innerHTML='';
+  let lastG='';
+  for(const t of TRADES){
+    if(t.g!==lastG){
+      lastG=t.g;
+      const g=document.createElement('div');g.className='bk-group';
+      g.textContent=t.g==='buy'?'💚 用绿宝石买':'📦 卖东西换绿宝石';
+      list.appendChild(g);
+    }
+    const gid=t.give.id(),rid=t.get.id();
+    const row=document.createElement('div');row.className='bk-row trade-row';
+    row.appendChild(itemCell(gid,t.give.n));
+    const ar=document.createElement('span');ar.className='bk-arrow';ar.textContent='→';row.appendChild(ar);
+    const out=document.createElement('div');out.className='bk-out';out.appendChild(itemCell(rid,t.get.n));row.appendChild(out);
+    const nm=document.createElement('span');nm.style.fontSize='13px';nm.textContent=ITEMS[rid]?ITEMS[rid].name:'';row.appendChild(nm);
+    const btn=document.createElement('button');btn.className='trade-btn';btn.textContent='换！';
+    btn.disabled=countItemTotal(gid)<t.give.n;
+    btn.addEventListener('click',()=>{
+      if(!takeItemsTotal(gid,t.give.n)){showToast('东西不够哦！');renderTrade();return;}
+      giveItemToInv(rid,t.get.n);
+      sfx.pickup();
+      spawnBlockParticles(player.pos.x,player.pos.y+1.5,player.pos.z,'rgb(42,216,74)');
+      showToast('💚 成交！'+ITEMS[rid].name+' ×'+t.get.n);
+      tradedWithVillager=true;updateTasks();
+      renderTrade();
+    });
+    row.appendChild(btn);
+    list.appendChild(row);
+  }
+}
+
+// ---------------- 创造物品库（可重建：模组开关后刷新） ----------------
+// ---------------- 创造物品库（可重建，模组开关后刷新） ----------------
+function rebuildCreativeGrid(){
+  const cgr=$('creativeGrid');
+  if(!cgr)return;
+  const giveItem=id=>{
+    cursor={id:id,count:maxStackOf(id)};
+    sfx.pickup();refreshAll();
+  };
+  cgr.innerHTML='';
+  for(const id in ITEMS){
+    const it=ITEMS[id];
+    if(!it||!it.name)continue;
+    if(it.hideInCreative)continue;
+    if(it.mod&&!modsOn[it.mod])continue; // 模组没开就不显示
+    const el=document.createElement('div');
+    el.className='slot';el.title=it.name;
+    const cv=document.createElement('canvas');cv.width=16;cv.height=16;
+    drawItemIcon(cv.getContext('2d'),it.id);
+    el.appendChild(cv);
+    el.addEventListener('click',()=>giveItem(it.id));
+    // 触屏：轻点=拿取；滑动=滚动列表（不在 touchstart 拦截，不然滑不动）
+    let tsx=0,tsy=0;
+    el.addEventListener('touchstart',e=>{const t=e.changedTouches[0];tsx=t.clientX;tsy=t.clientY;},{passive:true});
+    el.addEventListener('touchend',e=>{
+      const t=e.changedTouches[0];
+      if(Math.hypot(t.clientX-tsx,t.clientY-tsy)<12){e.preventDefault();giveItem(it.id);}
+    },{passive:false});
+    cgr.appendChild(el);
+  }
+}

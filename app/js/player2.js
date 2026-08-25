@@ -4,7 +4,7 @@ const player={
   pos:new THREE.Vector3(48.5,40,48.5),
   vel:new THREE.Vector3(),
   yaw:0,pitch:0,onGround:false,
-  hp:20,maxHp:20,peakY:40,
+  hp:20,maxHp:20,peakY:40,jumpT:0,speedT:0,slowT:0, // 🧪 药水效果剩余秒数
   inWater:false,headWater:false,
   lastDamage:-99,dead:false,
   mounted:null, // 骑乘中的快乐恶魂
@@ -62,7 +62,13 @@ function physicsStep(dt,input){
   // 前向 = (-sin, -cos) (yaw=0 朝 -z)
   const dirX=fx*(-sin)+rz*(cos);
   const dirZ=fx*(-cos)+rz*(-sin);
-  const speed=player.inWater?3.0:(input.sprint?6.5:4.3);
+  // 🧪 药水效果倒计时
+  if(player.jumpT>0)player.jumpT-=dt;
+  if(player.speedT>0)player.speedT-=dt;
+  if(player.slowT>0)player.slowT-=dt;
+  let speed=player.inWater?3.0:(input.sprint?6.5:4.3);
+  if(player.speedT>0)speed*=1.6; // 💨 速度药水
+  if(player.inWater&&player.speedT>0)speed=Math.min(speed,5.5);
   const ctrl=player.onGround||player.inWater?1:0.35;
   player.vel.x=lerp(player.vel.x,dirX*speed,clamp(ctrl*dt*12,0,1));
   player.vel.z=lerp(player.vel.z,dirZ*speed,clamp(ctrl*dt*12,0,1));
@@ -78,25 +84,32 @@ function physicsStep(dt,input){
     if(input.jump)player.vel.y=Math.min(player.vel.y+60*dt,3.6);
     player.vel.y=clamp(player.vel.y,-3.5,4);
   }else{
-    player.vel.y-=25*dt;
-    player.vel.y=Math.max(player.vel.y,-40);
-    if(input.jump&&player.onGround){player.vel.y=8.4;player.onGround=false;}
+    player.vel.y-=25*dt*(player.slowT>0?0.3:1); // 🪶 缓降药水：轻轻飘
+    player.vel.y=Math.max(player.vel.y,player.slowT>0?-2.5:-40);
+    if(input.jump&&player.onGround){player.vel.y=player.jumpT>0?11:8.4;player.onGround=false;} // 🐇 跳跃药水跳更高
   }
   const wasGround=player.onGround;
   player.onGround=false;
   moveAxis('x',player.vel.x*dt);
   moveAxis('z',player.vel.z*dt);
   moveAxis('y',player.vel.y*dt);
-  // 掉落追踪
+  // 掉落追踪（掉进水里不受伤！）
+  if(player.inWater)player.peakY=player.pos.y; // 在水里一直重置高度
   if(!player.onGround){
     if(player.pos.y>player.peakY)player.peakY=player.pos.y;
   }else if(!wasGround){
     const dist=player.peakY-player.pos.y;
-    if(dist>4&&player.vel.y<=0.01){
+    const landB=getBlock(Math.floor(player.pos.x),Math.floor(player.pos.y),Math.floor(player.pos.z));
+    const underB=getBlock(Math.floor(player.pos.x),Math.floor(player.pos.y)-1,Math.floor(player.pos.z));
+    const safeWater=player.inWater||landB===B_WATER||underB===B_WATER;
+    if(dist>4&&player.vel.y<=0.01&&!safeWater&&!(player.slowT>0)){
       const armor=totalArmor();
       let dmg=Math.floor(dist-3);
       dmg=Math.max(0,Math.round(dmg*(1-Math.min(armor*0.04,0.8))));
       if(gameMode!=='parkour'&&dmg>0)damagePlayer(dmg,'从高处摔落'); // 跑酷不掉落伤害
+    }else if(dist>4&&safeWater){
+      sfx.splash();
+      spawnBlockParticles(player.pos.x,player.pos.y+0.5,player.pos.z,'rgb(80,140,255)');
     }
     player.peakY=player.pos.y;
   }
@@ -109,6 +122,14 @@ function physicsStep(dt,input){
     if(player.regenT>2){player.regenT=0;player.hp=Math.min(player.maxHp,player.hp+1);updateHearts();}
   }
 }
+function fullInfinityArmor(){ // 全套无尽贪婪盔甲
+  for(const a of inv.armor)if(!a||!ITEMS[a.id]||ITEMS[a.id].mat!=='infinity')return false;
+  return true;
+}
+function fullGodArmor(){ // 全套创世盔甲（HIM模组）：几乎不掉血！
+  for(const a of inv.armor)if(!a||!ITEMS[a.id]||ITEMS[a.id].mat!=='god')return false;
+  return true;
+}
 function totalArmor(){
   let s=0;
   for(const a of inv.armor)if(a)s+=ITEMS[a.id].armorPts+(a.ench?(a.ench.prot||0):0);
@@ -119,6 +140,13 @@ function damagePlayer(dmg,reason){
   if(gameMode==='parkour')return; // 跑酷：不掉血（掉落由 updateParkour 回起点）
   if(gameMode==='creative')return; // 创造模式不掉血
   if(gameMode==='shooter'&&SHOOTER.spawnProtectT>0){showToast('🛡 出生保护中，免疫伤害！');return;} // 出生保护免伤
+  if(fullGodArmor()){ // 创世神甲：比无尽贪婪还硬！
+    dmg=Math.max(dmg*0.05,0.05);
+    if(Math.random()<0.4)spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(255,232,160)');
+  }else if(fullInfinityArmor()){ // 无尽贪婪甲：打十下才掉一滴血
+    dmg=Math.max(dmg*0.1,0.1);
+    if(Math.random()<0.3)spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(190,110,255)');
+  }
   player.hp-=dmg;
   player.lastDamage=performance.now()/1000;
   sfx.hurt();
@@ -165,7 +193,7 @@ let pointerLocked=false;
 function $(id){return document.getElementById(id);}
 function show(id){$(id).classList.remove('hidden');}
 function hide(id){$(id).classList.add('hidden');}
-function anyPanelOpen(){return !$('invPanel').classList.contains('hidden')||!$('tablePanel').classList.contains('hidden')||!$('furnacePanel').classList.contains('hidden')||!$('bookPanel').classList.contains('hidden')||!$('mpPanel').classList.contains('hidden')||!$('cmdPanel').classList.contains('hidden')||!$('chestPanel').classList.contains('hidden')||!$('enchPanel').classList.contains('hidden');}
+function anyPanelOpen(){return !$('invPanel').classList.contains('hidden')||!$('tablePanel').classList.contains('hidden')||!$('furnacePanel').classList.contains('hidden')||!$('bookPanel').classList.contains('hidden')||!$('mpPanel').classList.contains('hidden')||!$('cmdPanel').classList.contains('hidden')||!$('chestPanel').classList.contains('hidden')||!$('enchPanel').classList.contains('hidden')||!$('tradePanel').classList.contains('hidden')||!$('brewPanel').classList.contains('hidden');}
 function inputEnabled(){return gameState==='playing'&&!player.dead&&!anyPanelOpen();}
 function lockPointer(){if(isTouch)return;const c=renderer.domElement;if(c.requestPointerLock)c.requestPointerLock();}
 function unlockPointer(){if(document.exitPointerLock&&document.pointerLockElement)document.exitPointerLock();}
@@ -215,7 +243,7 @@ function initControls(){
   });
   document.addEventListener('mousedown',e=>{
     if(gameState!=='playing'||!pointerLocked||anyPanelOpen()||player.dead)return;
-    if(e.button===0){if(heldItemId()===I.bread){eatBread();}else{mining=true;tryAttackMob();}}
+    if(e.button===0){if(heldIsFood()){eatFood();}else if(heldItemId()&&ITEMS[heldItemId()]&&ITEMS[heldItemId()].potion){drinkPotion(ITEMS[heldItemId()].potion);}else{mining=true;tryAttackMob();}}
     else if(e.button===2){
       // 枪战：手持手榴弹->按住蓄力；手持地雷->布雷；否则原放置/投掷逻辑
       if(gameMode==='shooter'){
@@ -323,7 +351,7 @@ function initTouch(){
       e.preventDefault();e.stopPropagation();
       if(id==='btnJump')jumpBtn=true;
       else if(id==='btnFlyDown')flyDownBtn=true;
-      else if(id==='btnMine'){if(heldItemId()===I.bread){eatBread();}else{mining=true;tryAttackMob();}}
+      else if(id==='btnMine'){if(heldIsFood()){eatFood();}else if(heldItemId()&&ITEMS[heldItemId()]&&ITEMS[heldItemId()].potion){drinkPotion(ITEMS[heldItemId()].potion);}else{mining=true;tryAttackMob();}}
       else if(id==='btnPlace'){
         // 触屏：手持手榴弹->按住蓄力，否则原放置逻辑
         if(gameMode==='shooter'&&heldItemId()&&ITEMS[heldItemId()]&&ITEMS[heldItemId()].type==='grenade'){startNadeCharge();return;}
@@ -525,7 +553,9 @@ function updateMining(dt){
   // 枪战模式：只允许挖玩家放置/改动过的方块（掩体等，blockDiff 有记录），竞技场原生方块保护
   const t0=curTarget;
   const playerChanged=t0&&blockDiff[t0.x+','+t0.y+','+t0.z]!==undefined;
-  if((gameMode==='shooter'&&!playerChanged)||!mining||!curTarget||!inputEnabled()||mobRaycast()){
+  // 🔱 拿着长矛按住挖掘键是「戳刺」，不会挖坏方块！
+  const heldIt=heldItemId()?ITEMS[heldItemId()]:null;
+  if((gameMode==='shooter'&&!playerChanged)||!mining||!curTarget||!inputEnabled()||mobRaycast()||(heldIt&&heldIt.toolType==='spear')){
     mineProgress=0;mineTarget=null;bar.style.display='none';
     return;
   }
@@ -547,6 +577,7 @@ function updateMining(dt){
     mineProgress=0;mineTarget=null;bar.style.display='none';
   }
 }
+let chainMining=false; // 防止无尽贪婪镐连锁挖矿时无限套娃
 function breakBlock(x,y,z,b){
   const held=heldItemId();
   // 枪战模式：挖掩体只清方块，不掉落物（防背包污染）
@@ -559,6 +590,25 @@ function breakBlock(x,y,z,b){
   }
   const cropStage=(b===B_CROPS)?(facings[x+','+y+','+z]||0):0; // setBlock 会清掉 facings，先记住生长阶段
   setBlock(x,y,z,B_AIR);
+  makeNoise(x,z); // 敲方块会发出声音，远古城市里的坚守者听得见！
+  // 🍀 幸运方块：挖开抽奖！
+  if(b===B_LUCKY||b===B_LUCKY_SUPER||b===B_UNLUCKY||b===B_LUCKY_DIAMOND||b===B_LUCKY_RAINBOW||b===B_LUCKY_TNT||b===B_LUCKY_MOB){
+    if(!modsOn.lucky){showToast('🔒 要先在开始界面打开幸运方块模组哦！');}
+    else luckyEvent(b,x,y,z);
+  }
+  // 💜 无尽贪婪镐子：一镐下去 3×3×3 一大片全碎！
+  if(held===I.infinity_pickaxe&&!chainMining){
+    chainMining=true;
+    for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-1;dz<=1;dz++){
+      if(dx===0&&dy===0&&dz===0)continue;
+      const nb=getBlock(x+dx,y+dy,z+dz);
+      if(nb===B_AIR)continue;
+      const nd=BLOCKS[nb];
+      if(!nd||!isFinite(nd.hard))continue; // 基岩、命令方块这些挖不动
+      breakBlock(x+dx,y+dy,z+dz,nb);
+    }
+    chainMining=false;
+  }
   // 门是上下两格，敲一格另一格也消失
   if(b===B_DOOR||b===B_DOOR_OPEN){
     const isDoor=v=>v===B_DOOR||v===B_DOOR_OPEN;
@@ -590,7 +640,12 @@ function breakBlock(x,y,z,b){
     if(cropStage>=3){spawnDrop(x+0.5,y+0.5,z+0.5,I.wheat,1);spawnDrop(x+0.5,y+0.5,z+0.5,I.seeds,1+Math.floor(Math.random()*2));}
     else spawnDrop(x+0.5,y+0.5,z+0.5,I.seeds,1);
   }
+  // 下界岩有几率掉冶炼粉（做超级TNT用）
+  if(b===B_NETHERRACK&&curDim==='nether'&&modsOn.storm&&Math.random()<0.3)spawnDrop(x+0.5,y+0.5,z+0.5,I.blaze_powder,1);
   let drop=BLOCKS[b].drop;
+  // 🔒 模组没开：模组方块挖掉就消失，不掉出来（没有模组效果！）
+  if(drop&&ITEMS[drop]&&ITEMS[drop].mod&&!modsOn[ITEMS[drop].mod])drop=0;
+  queueWaterNear(x,y,z); // 挖掉的方块旁边有水的话，水会流进来
   if(b===B_LEAVES||b===B_SPRUCE_LEAVES||b===B_DARK_LEAVES||b===B_CHERRY_LEAVES){
     const r=Math.random();
     if(r<0.05)drop=I.sapling; // 5% 掉树苗（空岛种树循环关键）
@@ -624,13 +679,23 @@ function dismountGhast(){
   player.peakY=player.pos.y;
   showToast('下来了');
 }
-function eatBread(){
-  if(player.hp<player.maxHp){
-    player.hp=Math.min(player.maxHp,player.hp+3);updateHearts();
-    showToast('🍞 真好吃！生命 +3');
-  }else showToast('🍞 啊呜啊呜……真好吃！');
+function eatFood(){
+  const fid=heldItemId();
+  const f=fid&&ITEMS[fid]?ITEMS[fid].food:0;
+  if(!f)return;
+  const emoji={bread:'🍞',carrot:'🥕',potato:'🥔'}[ITEMS[fid].key]||'🍞';
+  if(f>0){
+    if(player.hp<player.maxHp){
+      player.hp=Math.min(player.maxHp,player.hp+f);updateHearts();
+      showToast(emoji+' 真好吃！生命 +'+f);
+    }else showToast(emoji+' 啊呜啊呜……真好吃！');
+  }else{ // 腐肉等负分食物：吃了掉血
+    damagePlayer(Math.abs(f),'吃坏肚子了');
+    showToast(emoji+' 呃……这个不能吃！');
+  }
   if(gameMode!=='creative')consumeHeld(1);
 }
+function heldIsFood(){const id=heldItemId();return id&&ITEMS[id]&&ITEMS[id].food;}
 // 枪战掩体方块：选中圆石方块右键放置（shooter 模式，8 个限量）
 function placeBarrier(){
   if(gameMode!=='shooter'||player.dead)return;
@@ -679,19 +744,70 @@ function interactOrPlace(){
     return;
   }
   // 面包：吃一口回血（随时都能吃）
-  if(heldItemId()===I.bread){eatBread();return;}
+  if(heldIsFood()){eatFood();return;}
+  { // 🧪 手持药水：右键喝掉
+    const ph=heldItemId()?ITEMS[heldItemId()]:null;
+    if(ph&&ph.potion){drinkPotion(ph.potion);return;}
+  }
   const mh=mobRaycast();
   if(mh&&mh.mob.type==='hghast'&&mh.d<4.2){mountGhast(mh.mob);return;}
+  // 💚 村民交易：点村民打开交易面板
+  if(mh&&mh.mob.type==='villager'&&mh.d<4.2){openTrade();return;}
   const t=raycastVoxel(5.2);
   if(!t)return;
   if(t.block===B_TABLE){openTable();return;}
   if(t.block===B_FURNACE){openFurnace(t.x,t.y,t.z);return;}
   if(t.block===B_CHEST){openChest(t.x,t.y,t.z);return;}
   if(t.block===B_ENCHANT){openEnchant(t.x,t.y,t.z);return;}
+  if(t.block===B_BREW){openBrew();return;}
   if(t.block===B_PISTON||t.block===B_STICKY){pistonPush(t.x,t.y,t.z);return;}
   if(t.block===B_DOOR||t.block===B_DOOR_OPEN){toggleDoor(t.x,t.y,t.z);return;}
   if(t.block===B_BED||t.block===B_BED_HEAD){sleepInBed(t.x,t.y,t.z);return;}
   const held=heldItemId();
+  // 🪣 空桶装水：对着水点一下就装满（光线会穿过水打到水底，所以看相邻那一格）
+  if((held===I.bucket||held===I.infinity_bucket)&&getBlock(t.x+t.nx,t.y+t.ny,t.z+t.nz)===B_WATER){
+    setBlock(t.x+t.nx,t.y+t.ny,t.z+t.nz,B_AIR);
+    queueWaterNear(t.x+t.nx,t.y+t.ny,t.z+t.nz); // 旁边的水会流过来补位
+    inv.hot[player.sel]={id:held===I.bucket?I.water_bucket:I.infinity_water_bucket,count:1};
+    sfx.splash();
+    showToast(held===I.bucket?'🪣 装满水了！找块空地倒出来':'💜🪣 无尽水桶装满了！可以无限倒水！');
+    refreshAll();
+    return;
+  }
+  // 🪣 水桶倒水
+  if(held===I.water_bucket||held===I.infinity_water_bucket){
+    const tx=t.x+t.nx,ty=t.y+t.ny,tz=t.z+t.nz;
+    if(!inW(tx,ty,tz))return;
+    const cur=getBlock(tx,ty,tz);
+    if(cur!==B_AIR&&cur!==B_WATER)return;
+    setBlock(tx,ty,tz,B_WATER);
+    waterFlowQ.push({x:tx,y:ty,z:tz}); // 水开始流动
+    sfx.splash();
+    if(held===I.water_bucket){ // 铁桶倒完就空了
+      inv.hot[player.sel]={id:I.bucket,count:1};
+      showToast('🪣 水倒出来了！');
+    } // 无尽贪婪水桶永远倒不完，不用变回去
+    refreshAll();
+    return;
+  }
+  // 红石粉：撒在地上，放在活塞旁边还会把活塞推出去！
+  if(held===I.redstone){
+    const tx=t.x+t.nx,ty=t.y+t.ny,tz=t.z+t.nz;
+    if(!inW(tx,ty,tz))return;
+    const cur=getBlock(tx,ty,tz);
+    if(cur!==B_AIR&&cur!==B_WATER)return;
+    if(t.ny===0&&!isSolidBlock(getBlock(tx,ty-1,tz))){showToast('🔴 红石粉要撒在方块上面');return;}
+    setBlock(tx,ty,tz,B_REDSTONE);
+    if(gameMode!=='creative')consumeHeld(1);
+    sfx.breakBlock('grass');
+    // 旁边有活塞就触发它
+    for(const d of[[0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]]){
+      const nb=getBlock(tx+d[0],ty+d[1],tz+d[2]);
+      if(nb===B_PISTON||nb===B_STICKY)pistonPush(tx+d[0],ty+d[1],tz+d[2]);
+    }
+    showToast('🔴 撒了一撮红石粉！');
+    return;
+  }
   // 锄头：把泥土/草方块耕成农田
   if(held&&ITEMS[held]&&ITEMS[held].toolType==='hoe'&&(t.block===B_DIRT||t.block===B_GRASS)){
     if(getBlock(t.x,t.y+1,t.z)!==B_AIR){showToast('上面被挡住了，没法耕地');return;}

@@ -263,10 +263,22 @@ const MOB_CONF={
   zombie:{hp:6,w:0.35,h:1.8,speed:1.6},
   slime:{hp:2,w:0.5,h:0.6,speed:1.1},
   enderman:{hp:8,w:0.35,h:2.5,speed:2.6},
-  dragon:{hp:30,w:1.9,h:2.2,speed:4},
+  dragon:{hp:120,w:1.9,h:2.2,speed:4}, // 末影龙血变厚了，要打更久！
   crystal:{hp:1,w:0.45,h:1.0,speed:0},
   villager:{hp:6,w:0.35,h:1.8,speed:0.9},
-  golem:{hp:30,w:0.6,h:2.4,speed:1.5}
+  golem:{hp:30,w:0.6,h:2.4,speed:1.5},
+  him:{hp:120,w:0.4,h:1.9,speed:2.8}, // HIM：白眼大魔王
+  wstorm:{hp:150,w:1.5,h:2.5,speed:1.0}, // 凋零风暴
+  symbiote:{hp:25,w:0.5,h:1.8,speed:2.2}, // 凋零风暴共生体
+  witch:{hp:20,w:0.4,h:2.0,speed:1.4}, // 🧙 女巫：扔药水的坏蛋
+  pig:{hp:4,w:0.45,h:0.85,speed:0.9}, // 🐷 小猪
+  sheep:{hp:4,w:0.45,h:1.0,speed:0.8}, // 🐑 小羊
+  chicken:{hp:2,w:0.3,h:0.6,speed:1.0}, // 🐔 小鸡
+  spider:{hp:8,w:0.6,h:0.7,speed:2.4}, // 🕷 蜘蛛：晚上出来咬人
+  skeleton:{hp:8,w:0.35,h:1.8,speed:1.8}, // 💀 骷髅：远远地射箭
+  creeper:{hp:8,w:0.35,h:1.6,speed:1.9}, // 💚 苦力怕：悄悄靠近然后爆炸
+  warden:{hp:500,w:1.0,h:2.9,speed:3.2}, // 😱 坚守者：500颗心！看不见东西，但听得见你！
+  guardian:{hp:15,w:0.6,h:0.7,speed:2.2} // 🐟 守卫者：海底神殿的大眼怪鱼，会放电！
 };
 let nextNid=1; // mobs 网络 id（房主分配，联机广播用）
 function netMobByNid(nid){for(const m of mobs)if(m.nid===nid&&!m.dead)return m;return null;}
@@ -276,7 +288,13 @@ function spawnMob(type,x,z,y,nid){
     type==='hghast'?buildGhastModel():type==='zombie'?buildZombieModel():
     type==='slime'?buildSlimeModel():type==='enderman'?buildEndermanModel():
     type==='dragon'?buildDragonModel():type==='crystal'?buildCrystalModel():
-    type==='villager'?buildVillagerModel():type==='golem'?buildGolemModel():buildCreakingModel();
+    type==='villager'?buildVillagerModel():type==='golem'?buildGolemModel():
+    type==='him'?buildHimModel():type==='wstorm'?buildStormModel():type==='symbiote'?buildSymbioteModel():
+    type==='witch'?buildWitchModel():type==='pig'?buildPigModel():
+    type==='sheep'?buildSheepModel():type==='chicken'?buildChickenModel():
+    type==='spider'?buildSpiderModel():type==='skeleton'?buildSkeletonModel():
+    type==='creeper'?buildCreeperModel():type==='warden'?buildWardenModel():
+    type==='guardian'?buildGuardianModel():buildCreakingModel();
   const cf=MOB_CONF[type];
   const mob={
     type,pos:new THREE.Vector3(x+0.5,sy,z+0.5),
@@ -299,6 +317,9 @@ function spawnMobs(){
   const px=spawnPoint.x,pz=spawnPoint.z;
   for(let i=0;i<4;i++)trySpawnNear('cow',px,pz,6,24);
   for(let i=0;i<3;i++)trySpawnNear('turtle',px,pz,6,30);
+  for(let i=0;i<4;i++)trySpawnNear('pig',px,pz,6,24); // 🐷
+  for(let i=0;i<4;i++)trySpawnNear('sheep',px,pz,6,24); // 🐑
+  for(let i=0;i<4;i++)trySpawnNear('chicken',px,pz,6,22); // 🐔
   trySpawnGhast(px,pz);
 }
 function trySpawnNear(type,px,pz,minD,maxD){
@@ -326,6 +347,12 @@ function trySpawnNear(type,px,pz,minD,maxD){
         if(getBlock(x+dx,SEA,z+dz)===B_WATER){nearWater=true;break;}
       if(nearWater){spawnMob('slime',x,z);return;}
     }
+    if((type==='pig'||type==='sheep'||type==='chicken')&&top===B_GRASS&&y>SEA){
+      spawnMob(type,x,z);return;
+    }
+    if((type==='spider'||type==='skeleton'||type==='creeper')&&(top===B_GRASS||top===B_STONE||top===B_SAND||top===B_COBBLE||top===B_DIRT)&&y>SEA){
+      spawnMob(type,x,z);return;
+    }
   }
 }
 function trySpawnGhast(px,pz){
@@ -342,15 +369,18 @@ function dynamicSpawner(dt){
   if(spawnT>0)return;
   spawnT=4;
   const px=player.pos.x,pz=player.pos.z;
-  let cows=0,turtles=0,ghasts=0,creaks=0,zombies=0,slimes=0;
+  let cows=0,turtles=0,ghasts=0,creaks=0,zombies=0,slimes=0,pigs=0,sheeps=0,chickens=0,spiders=0,skeletons=0,creepers=0;
   for(let i=mobs.length-1;i>=0;i--){
     const m=mobs[i];
     if(m.dead)continue;
     const d=Math.hypot(m.pos.x-px,m.pos.z-pz);
-    if(d>96&&m!==player.mounted&&m.type!=='dragon'&&m.type!=='crystal'&&m.type!=='villager'&&m.type!=='golem'){killMob(m,true);continue;}
+    if(d>96&&m!==player.mounted&&m.type!=='dragon'&&m.type!=='crystal'&&m.type!=='villager'&&m.type!=='golem'&&m.type!=='guardian'){killMob(m,true);continue;}
     if(m.type==='cow')cows++;else if(m.type==='turtle')turtles++;
     else if(m.type==='hghast')ghasts++;else if(m.type==='creaking')creaks++;
     else if(m.type==='zombie')zombies++;else if(m.type==='slime')slimes++;
+    else if(m.type==='pig')pigs++;else if(m.type==='sheep')sheeps++;
+    else if(m.type==='chicken')chickens++;else if(m.type==='spider')spiders++;
+    else if(m.type==='skeleton')skeletons++;else if(m.type==='creeper')creepers++;
   }
   // 下界：僵尸+史莱姆常年出没；末地：末影人
   if(curDim==='nether'){
@@ -371,9 +401,15 @@ function dynamicSpawner(dt){
     if(turtles<2&&Math.random()<0.25)trySpawnNear('turtle',px,pz,12,26);
     if(ghasts<2&&Math.random()<0.2)trySpawnGhast(px,pz);
     if(slimes<2&&Math.random()<0.2)trySpawnNear('slime',px,pz,14,28);
+    if(pigs<5&&Math.random()<0.6)trySpawnNear('pig',px,pz,14,28); // 🐷
+    if(sheeps<5&&Math.random()<0.6)trySpawnNear('sheep',px,pz,14,28); // 🐑
+    if(chickens<5&&Math.random()<0.6)trySpawnNear('chicken',px,pz,12,26); // 🐔
   }else{
     if(creaks<3&&Math.random()<0.7)trySpawnNear('creaking',px,pz,16,26);
     if(gameMode!=='creative'&&zombies<4&&Math.random()<0.8)trySpawnNear('zombie',px,pz,14,26);
+    if(gameMode!=='creative'&&spiders<4&&Math.random()<0.7)trySpawnNear('spider',px,pz,14,26); // 🕷
+    if(gameMode!=='creative'&&skeletons<4&&Math.random()<0.7)trySpawnNear('skeleton',px,pz,14,26); // 💀
+    if(gameMode!=='creative'&&creepers<3&&Math.random()<0.6)trySpawnNear('creeper',px,pz,16,28); // 💚
     let enders=0;
     for(const m of mobs)if(!m.dead&&m.type==='enderman')enders++;
     if(enders<2&&Math.random()<0.3)trySpawnNear('enderman',px,pz,18,30); // 主世界夜晚也有末影人
@@ -443,7 +479,7 @@ function updateCreaking(m,dt){ // 嘎吱怪：没人看时才动，天亮消失
   for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
   mobFlash(m,dt);
 }
-let foundVillage=false,golemKilled=false;
+let foundVillage=false,golemKilled=false,tradedWithVillager=false;
 function updateGolem(m,dt){ // 铁傀儡：平时散步巡逻，你打它或打村民就会生气追你
   m.atkT-=dt;
   const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
@@ -487,8 +523,16 @@ function updateGolem(m,dt){ // 铁傀儡：平时散步巡逻，你打它或打�
   mobFlash(m,dt);
 }
 function updateZombie(m,dt){ // 僵尸：夜晚追击玩家，天亮自燃（末影人也用这套追击AI，但不会烧）
+  if(m.calm&&!m.enraged){ // 凋零风暴体内的怪物：没被打醒前乖乖站着
+    m.vel.x*=0.3;m.vel.z*=0.3;m.moving=false;
+    m.vel.y-=22*dt;m.onGround=false;
+    mobMoveAxis(m,'x',m.vel.x*dt);mobMoveAxis(m,'z',m.vel.z*dt);mobMoveAxis(m,'y',m.vel.y*dt);
+    m.group.position.copy(m.pos);m.group.rotation.y=m.yaw;
+    mobFlash(m,dt);
+    return;
+  }
   const elev=Math.sin((dayTime-0.25)*Math.PI*2);
-  if(m.type==='zombie'&&elev>0.12){
+  if(m.type==='zombie'&&elev>0.12&&!m.noBurn){
     m.burnT=(m.burnT||0)+dt;
     if(Math.random()<dt*8)spawnBlockParticles(m.pos.x,m.pos.y+1.6,m.pos.z,'rgb(255,140,40)');
     if(m.burnT>2.5){ // 白天烧死
@@ -521,6 +565,318 @@ function updateZombie(m,dt){ // 僵尸：夜晚追击玩家，天亮自燃（末
   m.group.position.copy(m.pos);
   m.group.rotation.y=m.yaw;
   const sw=Math.sin(m.walkT*8)*(m.moving?0.6:0);
+  for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
+  mobFlash(m,dt);
+}
+// ---------------- 🐷🐑🐔 更多原版动物模型 ----------------
+function buildPigModel(){ // 🐷 小猪：粉粉的，有鼻子
+  const g=new THREE.Group();
+  const pink=new THREE.MeshLambertMaterial({color:0xf0a0a8});
+  const pinkD=new THREE.MeshLambertMaterial({color:0xd88090});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.45,0.8),pink);
+  body.position.y=0.6;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.4,0.4),pink);
+  head.position.set(0,0.72,-0.55);g.add(head);
+  const snout=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.14,0.06),pinkD);
+  snout.position.set(0,0.66,-0.78);g.add(snout);
+  const earM=pinkD;
+  for(const ex of [-0.14,0.14]){
+    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.12,0.04),earM);
+    ear.position.set(ex,0.95,-0.55);g.add(ear);
+  }
+  const legs=[];
+  for(const p of [[-0.16,-0.25],[0.16,-0.25],[-0.16,0.28],[0.16,0.28]]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.4,0.14),pinkD);
+    leg.position.set(p[0],0.2,p[1]);g.add(leg);legs.push(leg);
+  }
+  return {g,legs};
+}
+function buildSheepModel(){ // 🐑 小羊：白白的羊毛软乎乎
+  const g=new THREE.Group();
+  const wool=new THREE.MeshLambertMaterial({color:0xeeeeee});
+  const skin=new THREE.MeshLambertMaterial({color:0xcfa88a});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.55,0.85),wool);
+  body.position.y=0.68;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34),skin);
+  head.position.set(0,0.72,-0.58);g.add(head);
+  const hat=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.16,0.38),wool);
+  hat.position.set(0,0.92,-0.56);g.add(hat); // 头顶一撮毛
+  const legs=[];
+  for(const p of [[-0.18,-0.26],[0.18,-0.26],[-0.18,0.3],[0.18,0.3]]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.42,0.13),new THREE.MeshLambertMaterial({color:0x9a8474}));
+    leg.position.set(p[0],0.21,p[1]);g.add(leg);legs.push(leg);
+  }
+  return {g,legs};
+}
+function buildChickenModel(){ // 🐔 小鸡：白白小小，黄嘴巴红鸡冠
+  const g=new THREE.Group();
+  const white=new THREE.MeshLambertMaterial({color:0xf5f5f0});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.32,0.42),white);
+  body.position.y=0.42;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.26,0.24),white);
+  head.position.set(0,0.68,-0.26);g.add(head);
+  const beak=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.08,0.08),new THREE.MeshLambertMaterial({color:0xf0a020}));
+  beak.position.set(0,0.64,-0.42);g.add(beak);
+  const comb=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.1,0.14),new THREE.MeshLambertMaterial({color:0xe03030}));
+  comb.position.set(0,0.84,-0.26);g.add(comb); // 红鸡冠
+  const legs=[];
+  for(const lx of [-0.08,0.08]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.26,0.06),new THREE.MeshLambertMaterial({color:0xf0a020}));
+    leg.position.set(lx,0.13,0);g.add(leg);legs.push(leg);
+  }
+  return {g,legs};
+}
+// ---------------- 🕷💀💚 更多原版怪物模型 ----------------
+function buildSpiderModel(){ // 🕷 蜘蛛：八条腿红红的眼睛
+  const g=new THREE.Group();
+  const dark=new THREE.MeshLambertMaterial({color:0x2a2028});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.3,0.8),dark);
+  body.position.y=0.45;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.3,0.4),dark);
+  head.position.set(0,0.42,-0.55);g.add(head);
+  const eyeM=new THREE.MeshLambertMaterial({color:0xff2020});
+  for(const ex of [-0.12,-0.04,0.04,0.12]){
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.02),eyeM);
+    eye.position.set(ex,0.46,-0.76);g.add(eye); // 四只红眼睛
+  }
+  const legs=[];
+  for(let s=0;s<2;s++)for(let k=0;k<4;k++){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,0.06),dark);
+    leg.position.set(s===0?-0.55:0.55,0.35,-0.35+k*0.24);
+    leg.rotation.z=s===0?0.35:-0.35;
+    g.add(leg);legs.push(leg);
+  }
+  return {g,legs};
+}
+function buildSkeletonModel(){ // 💀 骷髅：白白的骨头架子
+  const g=new THREE.Group();
+  const bone=new THREE.MeshLambertMaterial({color:0xd8d8d0});
+  const boneD=new THREE.MeshLambertMaterial({color:0xb0b0a8});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.7,0.22),bone);
+  body.position.y=1.05;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.34,0.34),bone);
+  head.position.y=1.6;g.add(head);
+  const eyeM=new THREE.MeshLambertMaterial({color:0x111111});
+  for(const ex of [-0.08,0.08]){
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.09,0.02),eyeM);
+    eye.position.set(ex,1.62,-0.18);g.add(eye);
+  }
+  for(const ax of [-0.26,0.26]){
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.55,0.1),boneD);
+    arm.position.set(ax,1.1,0);g.add(arm);
+  }
+  const legs=[];
+  for(const lx of [-0.1,0.1]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.7,0.1),boneD);
+    leg.position.set(lx,0.35,0);g.add(leg);legs.push(leg);
+  }
+  return {g,legs};
+}
+function buildCreeperModel(){ // 💚 苦力怕：绿绿的，一张苦瓜脸
+  const g=new THREE.Group();
+  const green=new THREE.MeshLambertMaterial({color:0x4a9a3a});
+  const greenD=new THREE.MeshLambertMaterial({color:0x3a7a2e});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.85,0.26),green);
+  body.position.y=0.95;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4),green);
+  head.position.y=1.6;g.add(head);
+  const faceM=new THREE.MeshLambertMaterial({color:0x182a12});
+  for(const ex of [-0.09,0.09]){
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.1,0.02),faceM);
+    eye.position.set(ex,1.66,-0.21);g.add(eye);
+  }
+  const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.2,0.02),faceM);
+  mouth.position.set(0,1.42,-0.21);g.add(mouth); // 苦脸嘴
+  const legs=[];
+  for(const p of [[-0.1,-0.08],[0.1,-0.08],[-0.1,0.08],[0.1,0.08]]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.35,0.16),greenD);
+    leg.position.set(p[0],0.17,p[1]);g.add(leg);legs.push(leg);
+  }
+  return {g,legs};
+}
+function buildWardenModel(){ // 😱 坚守者：超级大怪物！没有眼睛，靠听声音找你！
+  const g=new THREE.Group();
+  const dark=new THREE.MeshLambertMaterial({color:0x0e3a3a}); // 深青色的身体
+  const darkD=new THREE.MeshLambertMaterial({color:0x082828});
+  const glow=new THREE.MeshLambertMaterial({color:0x20e0c8,emissive:0x18a898}); // 胸口发光
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.3,0.75),dark);
+  body.position.y=1.6;g.add(body);
+  const heart=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.5,0.1),glow);
+  heart.position.set(0,1.65,-0.4);g.add(heart); // 发光的心脏
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.75,0.55,0.6),darkD);
+  head.position.y=2.5;g.add(head); // 注意：没有眼睛！它是瞎的！
+  for(const s of [-1,1]){ // 两根大触角，专门听声音
+    const horn=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.7,0.12),darkD);
+    horn.position.set(s*0.42,2.95,0);horn.rotation.z=-s*0.5;g.add(horn);
+    const tip=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.16),glow);
+    tip.position.set(s*0.6,3.25,0);g.add(tip);
+  }
+  for(const s of [-1,1]){ // 两条粗胳膊
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.32,1.3,0.32),dark);
+    arm.position.set(s*0.75,1.55,0);g.add(arm);
+  }
+  const legs=[];
+  for(const lx of [-0.28,0.28]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.95,0.36),darkD);
+    leg.position.set(lx,0.47,0);g.add(leg);legs.push(leg);
+  }
+  return {g,legs};
+}
+
+// ---------------- 🕷 蜘蛛：晚上追人咬，白天乖乖散步 ----------------
+function updateSpider(m,dt){
+  const elev=Math.sin((dayTime-0.25)*Math.PI*2);
+  const hostile=elev<0.1; // 只有晚上才凶
+  m.atkT-=dt;
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  if(hostile&&dist<24&&dist>1.0&&!player.dead){
+    const ux=dx/dist,uz=dz/dist;
+    m.vel.x=ux*m.speed;m.vel.z=uz*m.speed;
+    m.moving=true;m.walkT+=dt*6;
+    m.yaw=Math.atan2(-ux,-uz);
+    if(m.blocked&&m.onGround)m.vel.y=6; // 蜘蛛会跳高高
+  }else{
+    m.dirT-=dt;
+    if(m.dirT<=0){m.dirT=2+Math.random()*4;m.yaw=Math.random()*Math.PI*2;m.moving=Math.random()<0.5;}
+    if(m.moving){m.vel.x=-Math.sin(m.yaw)*m.speed*0.5;m.vel.z=-Math.cos(m.yaw)*m.speed*0.5;m.walkT+=dt*3;}
+    else{m.vel.x*=0.5;m.vel.z*=0.5;}
+  }
+  m.vel.y-=22*dt;m.vel.y=Math.max(m.vel.y,-30);
+  m.onGround=false;
+  mobMoveAxis(m,'x',m.vel.x*dt);mobMoveAxis(m,'z',m.vel.z*dt);mobMoveAxis(m,'y',m.vel.y*dt);
+  if(hostile&&dist<1.5&&m.atkT<=0&&!player.dead){
+    damagePlayer(1.5,'被蜘蛛咬了');m.atkT=1.0;
+  }
+  if(m.pos.y<-5){killMob(m,true);return;}
+  m.group.position.copy(m.pos);m.group.rotation.y=m.yaw;
+  const sw=Math.sin(m.walkT*8)*(m.moving?0.4:0);
+  for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
+  mobFlash(m,dt);
+}
+// ---------------- 💀 骷髅：远远地射箭，白天会被太阳烧死 ----------------
+function updateSkeleton(m,dt){
+  const elev=Math.sin((dayTime-0.25)*Math.PI*2);
+  if(elev>0.12){ // 白天烧死
+    m.burnT=(m.burnT||0)+dt;
+    if(Math.random()<dt*8)spawnBlockParticles(m.pos.x,m.pos.y+1.6,m.pos.z,'rgb(255,140,40)');
+    if(m.burnT>2.5){spawnBlockParticles(m.pos.x,m.pos.y+1,m.pos.z,'rgb(255,120,30)');killMob(m,false);return;}
+  }else m.burnT=0;
+  m.atkT-=dt;
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  if(dist<20&&!player.dead){
+    const ux=dx/dist,uz=dz/dist;
+    m.yaw=Math.atan2(-ux,-uz);
+    if(dist<7){m.vel.x=-ux*m.speed;m.vel.z=-uz*m.speed;m.moving=true;m.walkT+=dt*5;} // 太近了往后退
+    else if(dist>13){m.vel.x=ux*m.speed;m.vel.z=uz*m.speed;m.moving=true;m.walkT+=dt*5;} // 太远了往前走
+    else{m.vel.x*=0.5;m.vel.z*=0.5;m.moving=false;}
+    if(m.atkT<=0&&dist<18){ // 射箭！
+      const dir=new THREE.Vector3(dx,(player.pos.y+1)-(m.pos.y+1.4),dz).normalize();
+      dir.y+=0.06;
+      const mm=new THREE.Mesh(eshotGeo,new THREE.MeshBasicMaterial({color:0xe8e8e0}));
+      mm.position.set(m.pos.x,m.pos.y+1.4,m.pos.z);
+      mobsGroup.add(mm);
+      eshots.push({m:mm,vel:dir.multiplyScalar(12),life:6,dmg:2.5,msg:'被骷髅的箭射中了',color:'rgb(230,230,220)'});
+      sfx.hit();
+      m.atkT=2.2;
+    }
+  }else{
+    m.dirT-=dt;
+    if(m.dirT<=0){m.dirT=2+Math.random()*4;m.yaw=Math.random()*Math.PI*2;m.moving=Math.random()<0.5;}
+    if(m.moving){m.vel.x=-Math.sin(m.yaw)*m.speed*0.5;m.vel.z=-Math.cos(m.yaw)*m.speed*0.5;m.walkT+=dt*3;}
+    else{m.vel.x*=0.5;m.vel.z*=0.5;}
+  }
+  m.vel.y-=22*dt;m.vel.y=Math.max(m.vel.y,-30);
+  m.onGround=false;
+  mobMoveAxis(m,'x',m.vel.x*dt);mobMoveAxis(m,'z',m.vel.z*dt);mobMoveAxis(m,'y',m.vel.y*dt);
+  if(m.pos.y<-5){killMob(m,true);return;}
+  m.group.position.copy(m.pos);m.group.rotation.y=m.yaw;
+  const sw=Math.sin(m.walkT*8)*(m.moving?0.6:0);
+  for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
+  mobFlash(m,dt);
+}
+// ---------------- 💚 苦力怕：悄悄靠近你……嘶嘶嘶……砰！！ ----------------
+function updateCreeper(m,dt){
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  if(m.fuseT>0){ // 点着了！快要爆炸了！
+    m.fuseT-=dt;
+    m.vel.x*=0.3;m.vel.z*=0.3;m.moving=false;
+    if(Math.random()<dt*20)spawnBlockParticles(m.pos.x,m.pos.y+1.5,m.pos.z,'rgb(255,255,255)');
+    const big=1+Math.sin(m.fuseT*30)*0.12; // 一闪一闪变大
+    m.group.scale.set(big,big,big);
+    if(m.fuseT<=0){
+      explode(m.pos.x,m.pos.y+0.8,m.pos.z,3,14);
+      killMob(m,true);
+      return;
+    }
+  }else if(dist<20&&dist>2.0&&!player.dead){
+    const ux=dx/dist,uz=dz/dist;
+    m.vel.x=ux*m.speed;m.vel.z=uz*m.speed;
+    m.moving=true;m.walkT+=dt*5;
+    m.yaw=Math.atan2(-ux,-uz);
+    if(m.blocked&&m.onGround)m.vel.y=5;
+  }else if(dist<=2.0&&!player.dead){
+    m.fuseT=1.2; // 嘶嘶嘶……
+    sfx.hit();
+    showToast('💚 嘶嘶嘶……苦力怕要爆炸了！快跑！');
+  }else{
+    m.dirT-=dt;
+    if(m.dirT<=0){m.dirT=2+Math.random()*4;m.yaw=Math.random()*Math.PI*2;m.moving=Math.random()<0.5;}
+    if(m.moving){m.vel.x=-Math.sin(m.yaw)*m.speed*0.5;m.vel.z=-Math.cos(m.yaw)*m.speed*0.5;m.walkT+=dt*3;}
+    else{m.vel.x*=0.5;m.vel.z*=0.5;}
+  }
+  m.vel.y-=22*dt;m.vel.y=Math.max(m.vel.y,-30);
+  m.onGround=false;
+  mobMoveAxis(m,'x',m.vel.x*dt);mobMoveAxis(m,'z',m.vel.z*dt);mobMoveAxis(m,'y',m.vel.y*dt);
+  if(m.pos.y<-5){killMob(m,true);return;}
+  m.group.position.copy(m.pos);m.group.rotation.y=m.yaw;
+  const sw=Math.sin(m.walkT*8)*(m.moving?0.6:0);
+  for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
+  mobFlash(m,dt);
+}
+// ---------------- 😱 坚守者：500颗心！眼睛看不见，全靠听声音找你！ ----------------
+function updateWarden(m,dt){
+  m.atkT-=dt;
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  const now=performance.now()/1000;
+  const noiseAge=now-lastNoise.t;
+  const noiseD=Math.hypot(lastNoise.x-m.pos.x,lastNoise.z-m.pos.z);
+  let tx=null,tz=null,runSpd=0;
+  if(dist<26&&player.pos.y<20&&!player.dead){ // 在古城里它会一直追着你跑！！
+    tx=player.pos.x;tz=player.pos.z;runSpd=dist<4.5?m.speed*1.5:m.speed;
+  }else if(noiseAge<6&&noiseD<60){ // 听见声音了！冲过去看看！
+    tx=lastNoise.x;tz=lastNoise.z;runSpd=m.speed;
+    if(noiseD<2.5){lastNoise.t=-999;tx=null;} // 跑到声音的地方了，没人……
+  }
+  if(tx!==null){
+    const ddx=tx-m.pos.x,ddz=tz-m.pos.z;
+    const dd=Math.hypot(ddx,ddz)||1;
+    m.vel.x=ddx/dd*runSpd;m.vel.z=ddz/dd*runSpd;
+    m.moving=true;m.walkT+=dt*6;
+    m.yaw=Math.atan2(-ddx/dd,-ddz/dd);
+    if(m.blocked&&m.onGround)m.vel.y=6;
+    if(Math.random()<dt*2)spawnBlockParticles(m.pos.x,m.pos.y+2.6,m.pos.z,'rgb(30,200,180)'); // 头顶触角发光
+  }else{ // 没声音……慢慢地瞎走
+    m.dirT-=dt;
+    if(m.dirT<=0){m.dirT=2+Math.random()*4;m.yaw=Math.random()*Math.PI*2;m.moving=Math.random()<0.4;}
+    if(m.moving){m.vel.x=-Math.sin(m.yaw)*m.speed*0.25;m.vel.z=-Math.cos(m.yaw)*m.speed*0.25;m.walkT+=dt*2;}
+    else{m.vel.x*=0.5;m.vel.z*=0.5;}
+  }
+  m.vel.y-=22*dt;m.vel.y=Math.max(m.vel.y,-30);
+  m.onGround=false;
+  mobMoveAxis(m,'x',m.vel.x*dt);mobMoveAxis(m,'z',m.vel.z*dt);mobMoveAxis(m,'y',m.vel.y*dt);
+  if(dist<2.6&&m.atkT<=0&&!player.dead){ // 一巴掌超痛！
+    damagePlayer(8,'被坚守者拍扁了');
+    m.atkT=1.2;
+    if(dist>0.1){player.vel.x+=dx/dist*8;player.vel.z+=dz/dist*8;player.vel.y=5;}
+    sfx.explode?sfx.explode():sfx.hurt();
+  }
+  if(m.pos.y<-5){killMob(m,true);return;}
+  m.group.position.copy(m.pos);m.group.rotation.y=m.yaw;
+  const sw=Math.sin(m.walkT*8)*(m.moving?0.5:0);
   for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
   mobFlash(m,dt);
 }
@@ -607,11 +963,11 @@ function updateMobs(dt){
       if(m.legs)for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
       if(m.wingL){const flap=Math.sin(m.flyT*6)*0.55;m.wingL.rotation.x=flap;if(m.wingR)m.wingR.rotation.x=-flap;}
       if(m.atkT>0)m.atkT-=dt;
-      if(!player.dead&&(m.type==='zombie'||m.type==='enderman'||m.type==='creaking'||m.type==='golem')){
+      if(!player.dead&&(m.type==='zombie'||m.type==='enderman'||m.type==='creaking'||m.type==='golem'||m.type==='spider'||m.type==='skeleton'||m.type==='witch')){
         const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
         const dist=Math.hypot(dx,dz);
         if(dist<1.6&&m.atkT<=0){
-          damagePlayer(m.type==='enderman'?2:(m.type==='golem'?4:1.5),'被'+({zombie:'僵尸',enderman:'末影人',creaking:'嘎吱怪',golem:'铁傀儡'}[m.type])+'咬了');
+          damagePlayer(m.type==='enderman'?2:(m.type==='golem'?4:1.5),'被'+({zombie:'僵尸',enderman:'末影人',creaking:'嘎吱怪',golem:'铁傀儡',spider:'蜘蛛',skeleton:'骷髅',witch:'女巫'}[m.type])+'咬了');
           m.atkT=1.0;
         }
       }
@@ -620,11 +976,30 @@ function updateMobs(dt){
       continue;
     }
     if(m.hpBar&&m.hpBar.sp.visible){m.hpShowT-=dt;if(m.hpShowT<=0)m.hpBar.sp.visible=false;}
+    // ☠️ 中毒：每秒掉 1 点血
+    if(m.poisonT>0){
+      m.poisonT-=dt;m.poisonAcc=(m.poisonAcc||0)+dt;
+      if(m.poisonAcc>=1){
+        m.poisonAcc=0;
+        hurtMob(m,1);
+        spawnBlockParticles(m.pos.x,m.pos.y+1,m.pos.z,'rgb(90,220,90)');
+      }
+      if(m.dead)continue;
+    }
     if(m.type==='hghast'){updateGhast(m,dt);continue;}
     if(m.type==='creaking'){updateCreaking(m,dt);continue;}
     if(m.type==='zombie'||m.type==='enderman'){updateZombie(m,dt);continue;}
     if(m.type==='golem'){updateGolem(m,dt);continue;}
     if(m.type==='dragon'){updateDragon(m,dt);continue;}
+    if(m.type==='him'){updateHim(m,dt);continue;}
+    if(m.type==='wstorm'){updateWStorm(m,dt);continue;}
+    if(m.type==='symbiote'){updateSymbiote(m,dt);continue;}
+    if(m.type==='witch'){updateWitch(m,dt);continue;}
+    if(m.type==='spider'){updateSpider(m,dt);continue;}
+    if(m.type==='skeleton'){updateSkeleton(m,dt);continue;}
+    if(m.type==='creeper'){updateCreeper(m,dt);continue;}
+    if(m.type==='warden'){updateWarden(m,dt);continue;}
+    if(m.type==='guardian'){updateGuardian(m,dt);continue;}
     if(m.type==='crystal'){ // 末影水晶：原地旋转发光
       m.flyT+=dt;
       m.group.rotation.y+=dt*1.5;
@@ -652,7 +1027,8 @@ function updateMobs(dt){
     mobMoveAxis(m,'x',m.vel.x*dt);
     mobMoveAxis(m,'z',m.vel.z*dt);
     mobMoveAxis(m,'y',m.vel.y*dt);
-    if(m.blocked){m.yaw+=Math.PI/2;m.dirT=1;}
+    if(m.turnT>0)m.turnT-=dt; // 转身冷却：卡住时跳一下+慢慢转身，不会原地打转
+    if(m.blocked){if(m.onGround)m.vel.y=4.5;if(m.turnT<=0||m.turnT===undefined){m.yaw+=Math.PI/2;m.dirT=1;m.turnT=0.8;}}
     if(m.pos.y<-5){killMob(m,true);continue;}
     // 动画
     m.group.position.copy(m.pos);
@@ -713,7 +1089,6 @@ function playerRaycast(){
   }
   return best;
 }
-let attackCd=0;
 // ---------------- 枪战模式（shooter）：射击/换弹/重生/计分 ----------------
 let SHOOTER={score:{},target:10,winner:null,ammo:{},lastShot:0,reloading:false,reloadEnd:0,streak:0,lastKillT:0,spawnProtectT:0,reserve:{}};
 let arenaLoot=false; // 枪战子模式：false=普通（开局发全套武器）/ true=捡枪（地上随机刷武器，捡到才能用）
@@ -1480,6 +1855,632 @@ function explodeMissile(x,y,z,aid,an){
     }
   }
 }
+// ---------------- 背包统计工具（酿造/枪械弹药用） ----------------
+function countItemTotal(id){ // 背包里某物一共有多少（所有格子加起来）
+  let n=0;
+  for(const arr of [inv.hot,inv.store])for(const s of arr)if(s&&s.id===id)n+=s.count;
+  return n;
+}
+function takeItemsTotal(id,n){ // 从背包拿走 n 个（可以跨格子扣）
+  if(countItemTotal(id)<n)return false;
+  let left=n;
+  for(const arr of [inv.hot,inv.store]){
+    for(let i=0;i<arr.length&&left>0;i++){
+      const s=arr[i];
+      if(s&&s.id===id){const mv=Math.min(left,s.count);s.count-=mv;left-=mv;if(s.count<=0)arr[i]=null;}
+    }
+  }
+  refreshAll();
+  return true;
+}
+function giveItemToInv(id,n){ // 把东西放进背包：先堆叠，再找空格，实在没地方就掉在脚边
+  let left=n;
+  const max=maxStackOf(id);
+  for(const arr of [inv.hot,inv.store]){
+    for(let i=0;i<arr.length&&left>0;i++){
+      const s=arr[i];
+      if(s&&s.id===id&&s.count<max){const mv=Math.min(left,max-s.count);s.count+=mv;left-=mv;}
+    }
+  }
+  for(const arr of [inv.hot,inv.store]){
+    for(let i=0;i<arr.length&&left>0;i++){
+      if(!arr[i]){const mv=Math.min(left,max);arr[i]={id,count:mv};left-=mv;}
+    }
+  }
+  if(left>0)spawnDrop(player.pos.x,player.pos.y+1,player.pos.z,id,left);
+  refreshAll();
+}
+
+// ---------------- 🌪 凋零风暴的黑色骷髅头（它会射你） ----------------
+const eshots=[];
+const eshotGeo=new THREE.BoxGeometry(0.3,0.3,0.3);
+function stormShoot(m){
+  const dir=new THREE.Vector3(player.pos.x-m.pos.x,(player.pos.y+1)-(m.pos.y+1.5),player.pos.z-m.pos.z).normalize();
+  const mm=new THREE.Mesh(eshotGeo,new THREE.MeshBasicMaterial({color:0x3a2a50}));
+  mm.position.set(m.pos.x,m.pos.y+1.5,m.pos.z);
+  mobsGroup.add(mm);
+  eshots.push({m:mm,vel:dir.multiplyScalar(10),life:6});
+}
+// 🧙 女巫扔药水（紫色的药水球飞过来砸你）
+function witchShoot(m){
+  const dir=new THREE.Vector3(player.pos.x-m.pos.x,(player.pos.y+1)-(m.pos.y+1.6),player.pos.z-m.pos.z).normalize();
+  dir.y+=0.08; // 稍微抛高一点，像扔出去的弧线
+  const mm=new THREE.Mesh(eshotGeo,new THREE.MeshBasicMaterial({color:0xb04ae8}));
+  mm.position.set(m.pos.x,m.pos.y+1.6,m.pos.z);
+  mobsGroup.add(mm);
+  eshots.push({m:mm,vel:dir.multiplyScalar(9),life:6,dmg:3,msg:'被女巫的药水砸中了',color:'rgb(200,90,255)'});
+}
+function updateEshots(dt){
+  for(let i=eshots.length-1;i>=0;i--){
+    const e=eshots[i];
+    e.life-=dt;
+    e.m.position.x+=e.vel.x*dt;e.m.position.y+=e.vel.y*dt;e.m.position.z+=e.vel.z*dt;
+    const p=e.m.position;
+    let dead=e.life<=0;
+    if(!dead&&Math.hypot(p.x-player.pos.x,p.y-(player.pos.y+1),p.z-player.pos.z)<1){
+      damagePlayer(e.dmg||3,e.msg||'被凋零风暴的凋零头击中了');
+      spawnBlockParticles(p.x,p.y,p.z,e.color||'rgb(90,50,140)');
+      dead=true;
+    }
+    if(!dead&&isSolidBlock(getBlock(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z))))dead=true;
+    if(dead){mobsGroup.remove(e.m);e.m.material.dispose();eshots.splice(i,1);}
+  }
+}
+
+// ---------------- 🧙 女巫：扔药水的沼泽坏蛋 ----------------
+function updateWitch(m,dt){
+  m.atkT-=dt;
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  if(gameMode==='survival'&&!player.dead&&dist<16){
+    // 不追太近，保持一点距离扔药水
+    if(dist>7){
+      const ux=dx/dist,uz=dz/dist;
+      m.vel.x=ux*m.speed;m.vel.z=uz*m.speed;
+      m.moving=true;m.walkT+=dt*5;
+      m.yaw=Math.atan2(-ux,-uz);
+    }else{m.vel.x*=0.3;m.vel.z*=0.3;m.moving=false;m.yaw=Math.atan2(-dx/(dist||1),-dz/(dist||1));}
+    // 每隔 3 秒扔一瓶药水
+    if(m.atkT<=0){
+      m.atkT=3;
+      witchShoot(m);
+      showToast('🧙 女巫扔出了一瓶药水！快躲开！');
+    }
+  }else{
+    // 平时慢慢溜达
+    m.vel.x*=0.3;m.vel.z*=0.3;m.moving=false;
+  }
+  mobFlash(m,dt);
+}
+// ---------------- 👁 HIM：白眼大魔王 ----------------
+function updateHim(m,dt){
+  m.atkT-=dt;
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  if(gameMode==='survival'&&!player.dead&&dist<30){
+    // 追击玩家
+    if(dist>1.6){
+      const ux=dx/dist,uz=dz/dist;
+      m.vel.x=ux*m.speed;m.vel.z=uz*m.speed;
+      m.moving=true;m.walkT+=dt*5;
+      m.yaw=Math.atan2(-ux,-uz);
+    }else{m.vel.x*=0.3;m.vel.z*=0.3;m.moving=false;}
+    // 近身打你
+    if(dist<2&&m.atkT<=0){
+      damagePlayer(3,'被HIM打了');
+      m.atkT=1.2;
+      if(dist>0.1){player.vel.x+=dx/dist*5;player.vel.z+=dz/dist*5;player.vel.y=3;}
+    }
+    // 每隔几秒放技能：闪电⚡ / 黑曜石尖刺 / 瞬移
+    m.spellT=(m.spellT||2.5)-dt;
+    if(m.spellT<=0){
+      m.spellT=2.5+Math.random()*1.5;
+      const pick=Math.random();
+      if(pick<0.4){ // ⚡ 闪电劈你
+        for(let yy=0;yy<10;yy++)spawnBlockParticles(player.pos.x-0.3,player.pos.y+yy*0.8,player.pos.z-0.3,'rgb(255,240,120)');
+        sfx.breakBlock('glass');
+        damagePlayer(4,'被HIM的闪电劈中了');
+        showToast('⚡ HIM召唤了闪电！');
+      }else if(pick<0.75){ // 🗻 黑曜石尖刺从你脚下冒出来
+        const px=Math.floor(player.pos.x),pz=Math.floor(player.pos.z);
+        const py=Math.floor(player.pos.y);
+        let ok=false;
+        for(let k=0;k<3;k++){if(getBlock(px,py+k,pz)===0){setBlock(px,py+k,pz,B_OBSIDIAN);ok=true;}}
+        if(ok){
+          sfx.place('stone');
+          player.pos.y+=3.2;player.vel.y=2;player.peakY=player.pos.y;
+          damagePlayer(2,'被黑曜石尖刺顶到了');
+          showToast('🗻 黑曜石尖刺从你脚下钻出来了！');
+        }
+      }else{ // 💨 瞬移到你背后
+        spawnBlockParticles(m.pos.x,m.pos.y+1,m.pos.z,'rgb(255,255,255)');
+        const bx=Math.floor(player.pos.x-dx/(dist||1)*2),bz=Math.floor(player.pos.z-dz/(dist||1)*2);
+        m.pos.set(bx+0.5,Math.max(surfaceY(bx,bz)+1,player.pos.y),bz+0.5);
+        m.vel.set(0,0,0);
+        spawnBlockParticles(m.pos.x,m.pos.y+1,m.pos.z,'rgb(200,200,255)');
+        showToast('👁 HIM瞬移到你身边了！');
+      }
+    }
+  }else{ // 创造模式：HIM乖乖散步，不打人
+    m.dirT-=dt;
+    if(m.dirT<=0){m.dirT=2+Math.random()*4;m.yaw=Math.random()*Math.PI*2;m.moving=Math.random()<0.5;}
+    if(m.moving){m.vel.x=-Math.sin(m.yaw)*m.speed*0.4;m.vel.z=-Math.cos(m.yaw)*m.speed*0.4;m.walkT+=dt*3;}
+    else{m.vel.x*=0.5;m.vel.z*=0.5;}
+  }
+  m.vel.y-=22*dt;m.vel.y=Math.max(m.vel.y,-30);
+  m.onGround=false;
+  mobMoveAxis(m,'x',m.vel.x*dt);mobMoveAxis(m,'z',m.vel.z*dt);mobMoveAxis(m,'y',m.vel.y*dt);
+  if(m.blocked&&m.onGround)m.vel.y=4.5;
+  if(m.pos.y<-5){killMob(m,true);return;}
+  m.group.position.copy(m.pos);
+  m.group.rotation.y=m.yaw;
+  const sw=Math.sin(m.walkT*8)*(m.moving?0.5:0);
+  for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
+  mobFlash(m,dt);
+}
+
+// ---------------- 🌪 凋零风暴 ----------------
+function updateWStorm(m,dt){
+  const st=m.stage||1;
+  // 飘在玩家附近的半空中
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  if(dist>8&&!player.dead){m.pos.x+=dx/dist*m.speed*dt;m.pos.z+=dz/dist*m.speed*dt;}
+  const gy=surfaceY(Math.floor(m.pos.x),Math.floor(m.pos.z))+5+st;
+  m.pos.y+=(gy-m.pos.y)*Math.min(dt*1.5,1);
+  m.group.position.copy(m.pos);
+  m.group.rotation.y+=dt*0.15;
+  // 暴风云块绕着身体转圈圈，像真的风暴一样
+  const swl=m.group.userData.swirl;
+  if(swl)for(const s of swl){
+    s.a+=s.spd*dt;
+    s.m.position.x=Math.cos(s.a)*s.r;
+    s.m.position.z=Math.sin(s.a)*s.r;
+    s.m.position.y=s.y+Math.sin(s.a*2)*0.15;
+    s.m.rotation.y+=dt*0.8;
+  }
+  const sc=0.8+st*0.35;m.group.scale.set(sc,sc,sc); // 越吃越大！
+  // 吞噬旁边的方块
+  m.eatT=(m.eatT||0)-dt;
+  if(m.eatT<=0){m.eatT=2.2;stormEat(m);} // 吃得慢一些，进化也慢一些
+  stormSuckMobs(m,dt); // 第3阶段开始吸生物吃
+  // 朝你吐凋零头
+  m.shootT=(m.shootT||3)-dt;
+  if(m.shootT<=0&&gameMode==='survival'&&!player.dead&&dist<28){m.shootT=3.5;stormShoot(m);}
+  mobFlash(m,dt);
+}
+// 凋零风暴的嘴在哪里（命令方块那一侧）
+function stormMouthPos(m){
+  const st=m.stage||1,sc=0.8+st*0.35,ry=m.group.rotation.y;
+  if(st===1)return new THREE.Vector3(m.pos.x,m.pos.y+1.2,m.pos.z-0.6);
+  const d=(1.1+st*0.22)*0.62*sc+0.4;
+  return new THREE.Vector3(m.pos.x+d*Math.sin(ry),m.pos.y+2.3*sc,m.pos.z-d*Math.cos(ry));
+}
+// 被吸起来的方块：从地上飞进风暴的嘴里
+const flyBlocks=[];
+const flyBlockMats={};
+function suckBlock(x,y,z,b,storm){
+  setBlock(x,y,z,0);
+  let mat=flyBlockMats[b];
+  if(!mat){
+    const c=tileColors[BLOCKS[b].tiles.side]||'#888888';
+    mat=new THREE.MeshLambertMaterial({color:new THREE.Color(c)});
+    flyBlockMats[b]=mat;
+  }
+  const m=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.85,0.85),mat);
+  m.position.set(x+0.5,y+0.5,z+0.5);
+  mobsGroup.add(m);
+  flyBlocks.push({m,storm,sx:x+0.5,sy:y+0.5,sz:z+0.5,t:0,dur:1.6});
+}
+function updateFlyBlocks(dt){
+  for(let i=flyBlocks.length-1;i>=0;i--){
+    const f=flyBlocks[i];
+    f.t+=dt;
+    const k=Math.min(f.t/f.dur,1);
+    const st=f.storm&&!f.storm.dead;
+    const mp=st?stormMouthPos(f.storm):null;
+    if(!st){ // 风暴没了就掉下来消失
+      spawnBlockParticles(f.m.position.x,f.m.position.y,f.m.position.z,'rgb(120,120,120)');
+      mobsGroup.remove(f.m);flyBlocks.splice(i,1);continue;
+    }
+    // 先往上飘，再飞向嘴里（抛物线感）
+    const xx=f.sx+(mp.x-f.sx)*k,zz=f.sz+(mp.z-f.sz)*k;
+    const yy=f.sy+(mp.y-f.sy)*k+Math.sin(k*Math.PI)*2.2;
+    f.m.position.set(xx,yy,zz);
+    const s=1-k*0.75;f.m.scale.set(s,s,s);
+    f.m.rotation.x+=dt*3;f.m.rotation.y+=dt*2.5;
+    if(k>=1){ // 进嘴了！吃掉
+      f.storm.eaten=(f.storm.eaten||0)+1;
+      spawnBlockParticles(mp.x,mp.y,mp.z,'rgb(60,40,80)');
+      stormStageCheck(f.storm);
+      mobsGroup.remove(f.m);flyBlocks.splice(i,1);
+    }
+  }
+}
+function stormEat(m){
+  const st=m.stage||1,r=3+st;
+  let sucked=0;
+  for(let t=0;t<14&&sucked<6;t++){
+    const a=Math.random()*Math.PI*2,d=Math.random()*r;
+    const x=Math.floor(m.pos.x+Math.cos(a)*d),z=Math.floor(m.pos.z+Math.sin(a)*d);
+    const y=surfaceY(x,z),b=getBlock(x,y,z);
+    if(b===0||b===B_BEDROCK||b===B_OBSIDIAN||b===B_ALTAR||b===B_COMMAND||b===B_WATER||b===B_LAVA)continue;
+    suckBlock(x,y,z,b,m);sucked++; // 方块慢慢被拉进嘴里吃掉！
+  }
+  if(sucked>0)sfx.breakBlock('stone');
+  stormStageCheck(m);
+}
+// 第3阶段开始：把附近的生物吸过来吞掉！
+function stormSuckMobs(m,dt){
+  const st=m.stage||1;
+  if(st<3)return;
+  const mp=stormMouthPos(m),R=7+st;
+  for(const mob of mobs){
+    if(mob.dead||mob===m)continue;
+    if(mob.type==='hghast'||mob.type==='symbiote'||mob.type==='him'||mob.type==='wstorm'||mob.type==='dragon'||mob.type==='crystal')continue;
+    const dx=mp.x-mob.pos.x,dy=mp.y-(mob.pos.y+0.5),dz=mp.z-mob.pos.z;
+    const dxz=Math.hypot(dx,dz); // 水平距离够近就会被吸住（它飘在天上，地上的生物也会被吸上天）
+    if(dxz>=R)continue;
+    const d=Math.hypot(dx,dy,dz);
+    if(d<1.4){ // 吸进嘴里，一口吞掉！
+      spawnBlockParticles(mob.pos.x,mob.pos.y+0.6,mob.pos.z,'rgb(120,60,200)');
+      spawnBlockParticles(mp.x,mp.y,mp.z,'rgb(60,40,80)');
+      killMob(mob,true);
+      m.eaten=(m.eaten||0)+3; // 吃生物长得更快！
+      stormStageCheck(m);
+      const nowT=performance.now();
+      if(!m.eatToastT||nowT-m.eatToastT>5000){m.eatToastT=nowT;showToast('🌪 凋零风暴把生物吸进嘴里吞掉了！好可怕！');}
+      sfx.breakBlock('grass');
+    }else{ // 慢慢被吸过去（脚离地，飞向嘴巴）
+      const pull=(1-dxz/R)*7+1.5;
+      mob.pos.x+=dx/d*pull*dt;
+      mob.pos.y+=Math.max(dy/d*pull*dt,dt*0.8); // 被吸得飘起来
+      mob.pos.z+=dz/d*pull*dt;
+      mob.vel.set(0,0,0); // 被吸住动不了
+      mob.group.position.copy(mob.pos);
+      if(Math.random()<dt*3)spawnBlockParticles(mob.pos.x,mob.pos.y+0.5,mob.pos.z,'rgb(150,100,220)');
+    }
+  }
+}
+function stormStageCheck(m){
+  const e=m.eaten||0;
+  let ns=1;if(e>40)ns=2;if(e>140)ns=3;if(e>280)ns=4;if(e>450)ns=5; // 进化得很慢，要耐心喂……不对，要赶紧阻止它！
+  if(ns>(m.stage||1)){
+    m.stage=ns;m.maxHp+=20;m.hp+=20;
+    rebuildStormModel(m); // 变身！每个阶段长得都不一样
+    if(ns===2)showToast('🌪 凋零风暴吃到第2阶段了！它长出了触手！');
+    if(ns===3)showToast('🌪 第3阶段！它开始把生物吸进嘴里吞掉了！快把动物们带走！');
+    if(ns===4)showToast('🌪 第4阶段！它刀枪不入了！普通武器打不动它，快去合成💣恐怖炸弹！');
+    if(ns===5){
+      showToast('🌪 第5阶段！它放出了4只凋零风暴共生体！打败它们拿📕命令方块之书！');
+      for(let i=0;i<4;i++){
+        const sx=Math.floor(m.pos.x)+i*2-4,sz=Math.floor(m.pos.z)+2;
+        spawnMob('symbiote',sx,sz,surfaceY(sx,sz)+2);
+      }
+    }
+  }
+}
+function updateSymbiote(m,dt){ // 共生体：飞着追你咬
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  if(gameMode==='survival'&&!player.dead&&dist<30&&dist>1.4){
+    const ux=dx/dist,uz=dz/dist;
+    m.pos.x+=ux*m.speed*dt;m.pos.z+=uz*m.speed*dt;
+    m.yaw=Math.atan2(-ux,-uz);
+    const ty=player.pos.y+0.5;
+    m.pos.y+=(ty-m.pos.y)*Math.min(dt*2,1);
+    m.moving=true;m.walkT+=dt*5;
+  }else m.moving=false;
+  m.atkT-=dt;
+  if(dist<1.8&&m.atkT<=0&&gameMode==='survival'&&!player.dead){
+    damagePlayer(3,'被凋零风暴共生体咬了');m.atkT=1.2;
+  }
+  m.group.position.copy(m.pos);
+  m.group.rotation.y=m.yaw;
+  mobFlash(m,dt);
+}
+// 激活祭坛：先充能一分钟，凋零风暴才会苏醒！
+function activateAltar(t){
+  if(stormState.mob&&!stormState.mob.dead){showToast('🌪 凋零风暴已经在外面了！快逃……不对，快想办法打它！');return;}
+  if(stormState.actT>0){showToast('⏳ 祭坛正在充能……还差 '+Math.ceil(stormState.actT)+' 秒！');return;}
+  stormState.actT=60; // 一分钟后苏醒
+  stormState.altarPos={x:t.x,y:t.y,z:t.z};
+  showToast('⏳ 祭坛开始发光了！一分钟后凋零风暴就会苏醒……快去做准备！');
+  sfx.craft();
+}
+// 祭坛充能倒计时（主循环里每帧调用）
+function altarChargeTick(dt){
+  if(!(stormState.actT>0))return;
+  stormState.actT-=dt;
+  const ap=stormState.altarPos;
+  if(ap&&Math.random()<dt*8) // 充能时祭坛冒紫光
+    spawnBlockParticles(ap.x+Math.random(),ap.y+1+Math.random()*0.5,ap.z+Math.random(),'rgb(150,80,255)');
+  const left=Math.ceil(stormState.actT);
+  if(left===30&&!stormState.warned30){stormState.warned30=true;showToast('⏳ 还有30秒！祭坛的光越来越强了……');}
+  if(left===10&&!stormState.warned10){stormState.warned10=true;showToast('⚠️ 还有10秒！！地面在发抖！！');}
+  if(stormState.actT<=0){
+    stormState.warned30=false;stormState.warned10=false;
+    const t=stormState.altarPos;
+    const m=spawnMob('wstorm',t.x,t.z,t.y+5);
+    m.stage=1;m.eaten=0;
+    stormState.mob=m;stormState.wound=false;stormState.cmdHp=4;stormState.insideSpawned=false;
+    buildStormInterior();
+    for(let i=0;i<16;i++)spawnBlockParticles(t.x+Math.random()*2-0.5,t.y+Math.random()*3,t.z+Math.random()*2-0.5,'rgb(150,80,255)');
+    showToast('🌪 凋零风暴苏醒了！！它会吞噬方块越变越大，小心它的凋零头！');
+    sfx.hurt();
+  }
+}
+// 恐怖炸弹：炸开凋零风暴的口子
+function handleBombTap(t){
+  const m=stormState.mob;
+  setBlock(t.x,t.y,t.z,0);
+  if(m&&!m.dead&&!stormState.wound){
+    explode(t.x+0.5,t.y+0.5,t.z+0.5,6,20);
+    m.stage=7;stormState.wound=true;
+    const sc=0.8+7*0.35;m.group.scale.set(sc,sc,sc);
+    rebuildStormModel(m); // 炸出伤口的样子
+    showToast('💥 轰！！！凋零风暴被炸到了第7阶段！它身上撕开了一个大口子！');
+    setTimeout(()=>showToast('💜 快拿末影珍珠对着天空扔（点使用键），钻进它身体里去！'),2500);
+  }else{
+    explode(t.x+0.5,t.y+0.5,t.z+0.5,6,20);
+    showToast('💥 好大的爆炸！！');
+  }
+}
+// 凋零风暴的身体里面：一个黑曜石小房间，中间是命令方块
+function buildStormInterior(){
+  const X=STORM_ROOM.x,Y=STORM_ROOM.y,Z=STORM_ROOM.z;
+  for(let dx=0;dx<11;dx++)for(let dy=0;dy<6;dy++)for(let dz=0;dz<11;dz++){
+    const wall=(dx===0||dx===10||dz===0||dz===10||dy===0||dy===5);
+    setBlock(X+dx,Y+dy,Z+dz,wall?B_OBSIDIAN:0);
+  }
+  // 四个角落放萤石照亮
+  setBlock(X+1,Y+4,Z+1,B_GLOWSTONE);setBlock(X+9,Y+4,Z+1,B_GLOWSTONE);
+  setBlock(X+1,Y+4,Z+9,B_GLOWSTONE);setBlock(X+9,Y+4,Z+9,B_GLOWSTONE);
+  setBlock(X+5,Y+1,Z+5,B_COMMAND); // 中心的命令方块！
+}
+function enterStorm(){
+  stormState.returnPos=player.pos.clone();
+  if(!stormState.insideSpawned){
+    stormState.insideSpawned=true;
+    const X=STORM_ROOM.x,Y=STORM_ROOM.y,Z=STORM_ROOM.z;
+    for(let i=0;i<3;i++){ // 3只僵尸
+      const zm=spawnMob('zombie',X+2+i*3,Z+2,Y+1);
+      zm.calm=true;zm.noBurn=true;
+    }
+    for(let i=0;i<2;i++){ // 2只骷髅（白白的）
+      const sk=spawnMob('zombie',X+3+i*4,Z+8,Y+1);
+      sk.calm=true;sk.noBurn=true;sk.isSkeleton=true;
+      sk.group.traverse(o=>{if(o.material){o.material=o.material.clone();o.material.color.setHex(0xe8e4d8);}});
+    }
+  }
+  player.pos.set(STORM_ROOM.x+5.5,STORM_ROOM.y+1.2,STORM_ROOM.z+8.5);
+  player.vel.set(0,0,0);player.peakY=player.pos.y;
+  showToast('💜 你钻进了凋零风暴的身体！中间的命令方块是它的弱点！');
+  setTimeout(()=>showToast('😴 里面的僵尸和骷髅还没醒……快去打命令方块！（要打4下）'),2500);
+}
+function hitCommandBlock(){
+  stormState.cmdHp--;
+  sfx.hit();
+  const X=STORM_ROOM.x,Y=STORM_ROOM.y,Z=STORM_ROOM.z;
+  spawnBlockParticles(X+5,Y+1,Z+5,'rgb(255,180,80)');
+  // 打一下，体内的怪物全都醒了！
+  for(const m of mobs){
+    if(m.dead)continue;
+    if(Math.hypot(m.pos.x-(X+5),m.pos.z-(Z+5))<20&&m.calm)m.enraged=true;
+  }
+  if(stormState.cmdHp>0){
+    showToast('⚡ 命令方块被打了一下！僵尸骷髅醒过来了！还剩 '+stormState.cmdHp+' 下！');
+  }else{
+    stormDefeated();
+  }
+}
+function stormDefeated(){
+  // 清理体内的怪物
+  const X=STORM_ROOM.x,Z=STORM_ROOM.z;
+  for(const m of mobs){
+    if(!m.dead&&Math.hypot(m.pos.x-(X+5),m.pos.z-(Z+5))<20)killMob(m,true);
+  }
+  // 外面的凋零风暴死掉
+  if(stormState.mob&&!stormState.mob.dead){
+    const m=stormState.mob;
+    for(let i=0;i<20;i++)spawnBlockParticles(m.pos.x-1+Math.random()*2,m.pos.y+Math.random()*2,m.pos.z-1+Math.random()*2,'rgb(160,110,255)');
+    killMob(m,true);
+  }
+  stormState.mob=null;stormState.wound=false;stormState.cmdHp=4;stormState.insideSpawned=false;
+  // 把你送回原来的地方，送上风暴之心！
+  if(stormState.returnPos){player.pos.copy(stormState.returnPos);player.pos.y+=1;}
+  player.vel.set(0,0,0);player.peakY=player.pos.y;
+  spawnDrop(player.pos.x,player.pos.y+0.5,player.pos.z,I.storm_heart,1);
+  showToast('🏆 你打败了凋零风暴！！！获得了💜风暴之心！可以合成风暴之剑啦！');
+  sfx.craft();
+}
+function tryAttackMob(){
+  if(!inputEnabled())return;
+  const held0=heldItemId();
+  const it0=held0?ITEMS[held0]:null;
+  const isSpear=it0&&it0.toolType==='spear';
+  const hit=mobRaycast(isSpear?6.5:4.3); // 🔱 长矛戳得更远！
+  if(!hit)return;
+  const held=heldItemId();
+  const it=held?ITEMS[held]:null;
+  const hstack=inv.hot[player.sel];
+  const sharp=hstack&&hstack.ench?(hstack.ench.sharp||0):0;
+  let dmg=(it&&it.type==='tool'?it.dmg:1)+2*sharp;
+  // 🔱 长矛：跑得越快，戳得越痛！冲刺+跳跃戳最猛！
+  if(it&&it.toolType==='spear'){
+    const spd=Math.hypot(player.vel.x,player.vel.z);
+    const mul=1+spd*0.22+(!player.onGround?0.5:0); // 冲刺≈2.4倍，跳劈再多半倍
+    dmg=Math.round(dmg*mul);
+    if(spd>5)spawnBlockParticles(hit.mob.pos.x,hit.mob.pos.y+1,hit.mob.pos.z,'rgb(255,220,120)');
+  }
+  hurtMob(hit.mob,dmg);
+  if(held===I.infinity_sword)swordRain(hit.mob.pos.x,hit.mob.pos.z); // 天降剑雨！
+  if(held===I.dragon_egg_sword)swordRain(hit.mob.pos.x,hit.mob.pos.z,I.dragon_egg,8,'rgb(60,40,110)'); // 天降龙蛋雨！
+  if(held===I.cosmos_sword){ // 🌌 寰宇支配之剑：把怪打上天+天降 16 把剑！
+    hit.mob.vel.y=8;
+    swordRain(hit.mob.pos.x,hit.mob.pos.z,I.cosmos_sword,10,'rgb(74,255,74)',16);
+    spawnBlockParticles(hit.mob.pos.x,hit.mob.pos.y+1,hit.mob.pos.z,'rgb(74,255,74)');
+  }
+  attackCd=0.5;
+}
+// 怪物头顶的生命值爱心条（被打后显示 4 秒）
+function makeHpSprite(){
+  const cv=document.createElement('canvas');cv.width=76;cv.height=18;
+  const tex=new THREE.CanvasTexture(cv);tex.magFilter=THREE.NearestFilter;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false,transparent:true}));
+  sp.scale.set(1.35,0.32,1);sp.visible=false;
+  return {sp,cv,tex};
+}
+function drawMobHp(m){
+  if(!m.hpBar)m.hpBar=makeHpSprite();
+  const {sp,cv,tex}=m.hpBar;
+  const ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,76,18);
+  ctx.fillStyle='rgba(0,0,0,0.45)';ctx.fillRect(0,2,76,16);
+  const halfs=Math.max(0,Math.ceil(m.hp/m.maxHp*10));
+  for(let i=0;i<5;i++){
+    const v=halfs-i*2;
+    drawBarIcon(ctx,2+i*14,'heart',v>=2?2:(v===1?1:0));
+  }
+  tex.needsUpdate=true;
+  sp.visible=true;
+  m.hpShowT=4;
+}
+let attackCd=0; // 近战攻击冷却
+function hurtMob(m,dmg){
+  if(m.type==='hghast'){showToast('快乐恶魂是好朋友，不会受伤 ❤️');return;}
+  if(m.type==='wstorm'&&(m.stage||1)>=4){ // 第4阶段之后刀枪不入
+    showToast('🌪 没用的！第4阶段的凋零风暴刀枪不入！去合成💣恐怖炸弹！');
+    return;
+  }
+  m.hp-=dmg;m.flashT=0.4;
+  sfx.hit();
+  if(m.type==='him'&&Math.random()<0.5){ // HIM被打会瞬间传送跑掉！
+    const a=Math.random()*Math.PI*2,d=5+Math.random()*4;
+    const nx=Math.floor(m.pos.x+Math.cos(a)*d),nz=Math.floor(m.pos.z+Math.sin(a)*d);
+    spawnBlockParticles(m.pos.x,m.pos.y+1,m.pos.z,'rgb(255,255,255)');
+    m.pos.set(nx+0.5,Math.max(surfaceY(nx,nz)+1,m.pos.y),nz+0.5);
+    m.vel.set(0,0,0);
+    spawnBlockParticles(m.pos.x,m.pos.y+1,m.pos.z,'rgb(200,200,255)');
+    showToast('💨 HIM瞬间传送走了！');
+  }
+  if(m.type!=='dragon'&&m.type!=='crystal'){
+    drawMobHp(m);
+    if(m.hpBar.sp.parent!==m.group){m.group.add(m.hpBar.sp);m.hpBar.sp.position.set(0,m.h+0.5,0);}
+  }
+  // 打铁傀儡它会反击；打村民，附近的铁傀儡都会生气！
+  if(m.type==='golem'){m.angry=true;showToast('😠 铁傀儡生气了！小心它把你打飞！');}
+  if(m.type==='villager'){
+    for(const g2 of mobs)if(!g2.dead&&g2.type==='golem'&&Math.hypot(g2.pos.x-m.pos.x,g2.pos.z-m.pos.z)<24)g2.angry=true;
+    showToast('😠 你打了村民！铁傀儡要来教训你了！');
+  }
+  if(m.type==='dragon'&&crystalsAlive()>0){
+    const nowT=performance.now();
+    if(!window._lastCrystalHint||nowT-_lastCrystalHint>6000){
+      window._lastCrystalHint=nowT;
+      showToast('🐉 末影龙在回血！先打掉柱子上的粉色末影水晶！');
+    }
+  }
+  if(m.type!=='dragon'&&m.type!=='crystal'&&m.type!=='wstorm'&&m.type!=='him'){ // 末影龙/水晶/凋零风暴/HIM 不会被击退
+    const dx=m.pos.x-player.pos.x,dz=m.pos.z-player.pos.z;
+    const len=Math.hypot(dx,dz)||1;
+    m.vel.x+=dx/len*4;m.vel.z+=dz/len*4;m.vel.y=3;
+  }
+  if(m.hp<=0)killMob(m,false);
+}
+function killMob(m,silent){
+  if(m.dead)return;
+  m.dead=true;
+  mobsGroup.remove(m.group);
+  if(m.type==='villager'||m.type==='golem'){ // 记住这个村庄死过人，重进游戏不会复活
+    deadVillages[ck(Math.floor(m.pos.x/CH),Math.floor(m.pos.z/CH))]=1;
+  }
+  if(!silent){
+    sfx.mobDie();
+    spawnBlockParticles(m.pos.x,m.pos.y+0.5,m.pos.z,'rgb(200,60,60)');
+    if(m.type==='cow'){
+      const n=Math.floor(Math.random()*3); // 0-2 皮革
+      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.leather,n);
+      if(Math.random()<0.25)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.string,1);
+    }else if(m.type==='creaking'){
+      const n=1+Math.floor(Math.random()*2); // 1-2 树脂团
+      spawnDrop(m.pos.x,m.pos.y+0.8,m.pos.z,I.resin_clump,n);
+    }else if(m.type==='turtle'){
+      spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.scute,1);
+    }else if(m.type==='golem'){
+      const n=3+Math.floor(Math.random()*3); // 3-5 铁锭
+      spawnDrop(m.pos.x,m.pos.y+0.8,m.pos.z,I.iron_ingot,n);
+      if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+0.8,m.pos.z,B_FLOWER,1); // 偶尔掉朵小花
+      golemKilled=true;updateTasks();
+    }else if(m.type==='villager'){
+      showToast('😭 村民呜呜地哭了……铁傀儡不会放过你的');
+    }else if(m.type==='zombie'){
+      const n=Math.floor(Math.random()*3); // 0-2 腐肉
+      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.rotten_flesh,n);
+    }else if(m.type==='slime'){
+      const n=1+Math.floor(Math.random()*2); // 1-2 黏液球
+      spawnDrop(m.pos.x,m.pos.y+0.4,m.pos.z,I.slimeball,n);
+    }else if(m.type==='enderman'){
+      if(Math.random()<0.8)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.ender_pearl,1);
+    }else if(m.type==='him'){
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.god_sword,1); // 创世之剑！
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.god_core,2+((Math.random()*2)|0)); // 创世之核，做创世盔甲
+      showToast('🏆 你打败了HIM！掉了创世之剑和创世之核！比无尽贪婪还厉害！');
+    }else if(m.type==='symbiote'){
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.command_book,1);
+      showToast('📕 共生体掉了一本命令方块之书！');
+    }else if(m.type==='witch'){
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.potion_heal,1+((Math.random()*2)|0)); // 1-2 瓶治疗药水
+      if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.slimeball,1); // 偶尔掉黏液球（酿药水用）
+      showToast('🧙 打败女巫了！她掉了治疗药水！');
+    }else if(m.type==='pig'){
+      const n=Math.floor(Math.random()*3); // 0-2 皮革
+      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.leather,n);
+    }else if(m.type==='sheep'){
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,B_WOOL,1+((Math.random()*2)|0)); // 1-2 羊毛
+    }else if(m.type==='chicken'){
+      if(Math.random()<0.7)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.arrow,1+((Math.random()*2)|0)); // 掉箭（羽毛做的）
+    }else if(m.type==='spider'){
+      const n=Math.floor(Math.random()*3); // 0-2 线
+      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.string,n);
+    }else if(m.type==='skeleton'){
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.arrow,1+((Math.random()*3)|0)); // 1-3 箭
+    }else if(m.type==='creeper'){
+      if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.redstone,1+((Math.random()*2)|0)); // 掉点火药（红石代替）
+    }else if(m.type==='guardian'){
+      spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,B_PRISM,1+((Math.random()*2)|0)); // 1-2 海晶石
+      if(Math.random()<0.4)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.gold_ingot,1); // 偶尔掉金锭
+    }else if(m.type==='warden'){
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.diamond,3+((Math.random()*3)|0)); // 3-5 钻石！
+      if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.infinity_ingot,1); // 运气好掉无尽贪婪锭！
+      showToast('🏆 你居然打败了坚守者！！500颗心的怪物被打倒了！');
+    }else if(m.type==='crystal'){
+      crystalsBroken++;
+      spawnBlockParticles(m.pos.x,m.pos.y+0.5,m.pos.z,'rgb(255,120,235)');
+      spawnBlockParticles(m.pos.x,m.pos.y+0.8,m.pos.z,'rgb(255,220,255)');
+      const left=crystalsAlive();
+      showToast(left>0?'💥 末影水晶碎了！还剩 '+left+' 个':'💥 末影水晶全碎了！末影龙不能回血了，打它！');
+      updateTasks();
+    }else if(m.type==='dragon'){
+      dragonKilled=true;
+      updateBossbar();
+      // 掉龙蛋和一堆末影珍珠
+      const ix=Math.floor(player.pos.x),iz=Math.floor(player.pos.z);
+      const iy=surfaceY(ix,iz)+1;
+      spawnDrop(ix+0.5,iy+0.5,iz+0.5,I.dragon_egg,1);
+      spawnDrop(ix+0.5,iy+0.5,iz+0.5,I.infinity_ingot,3+Math.floor(Math.random()*3)); // 龙掉 3-5 颗无尽贪婪锭！
+      spawnDrop(ix+0.5,iy+0.5,iz+0.5,I.ender_pearl,6);
+      // 岛中心开启返回主世界的传送门
+      setBlock(0,36,0,B_ENDPORTAL);
+      spawnBlockParticles(0.5,37,0.5,'rgb(200,120,255)');
+      showToast('🎉 打败末影龙了！岛中心开启了回家的传送门！');
+      updateTasks();saveGame();
+    }
+  }
+  const idx=mobs.indexOf(m);
+  if(idx>=0)mobs.splice(idx,1);
+}
+
 // ---------------- 弓箭 ----------------
 const arrows=[];
 const arrowGeo=new THREE.BoxGeometry(0.08,0.08,0.55);
@@ -1496,20 +2497,21 @@ function shootArrow(){
     -Math.sin(player.yaw)*Math.cos(player.pitch),
     Math.sin(player.pitch),
     -Math.cos(player.yaw)*Math.cos(player.pitch)).normalize();
-  const m=new THREE.Mesh(arrowGeo,new THREE.MeshBasicMaterial({color:0xd8d0c0}));
+  const magic=heldItemId()===I.infinity_bow; // 无尽贪婪弓的魔法箭
+  const m=new THREE.Mesh(arrowGeo,new THREE.MeshBasicMaterial({color:magic?0xb46ae8:0xd8d0c0}));
   m.position.set(player.pos.x+dir.x*0.8,player.pos.y+PEYE+dir.y*0.8,player.pos.z+dir.z*0.8);
   m.lookAt(m.position.clone().add(dir));
   mobsGroup.add(m);
   const bstack=inv.hot[player.sel];
   const pw=bstack&&bstack.ench?(bstack.ench.power||0):0;
-  arrows.push({m,vel:dir.multiplyScalar(20),life:5,dmg:3+2*pw});
+  arrows.push({m,vel:dir.multiplyScalar(magic?26:20),life:5,dmg:(magic?8:3)+2*pw,magic});
   sfx.place('wood');
 }
 function updateArrows(dt){
   for(let i=arrows.length-1;i>=0;i--){
     const a=arrows[i];
     a.life-=dt;
-    a.vel.y-=3.5*dt; // 轻微下坠
+    if(!a.bullet)a.vel.y-=3.5*dt; // 轻微下坠（子弹不下坠）
     a.m.position.x+=a.vel.x*dt;a.m.position.y+=a.vel.y*dt;a.m.position.z+=a.vel.z*dt;
     const p=a.m.position;
     let dead=a.life<=0;
@@ -1527,6 +2529,9 @@ function updateArrows(dt){
     }
     // 射中方块
     if(!dead&&isSolidBlock(getBlock(Math.floor(p.x),Math.floor(p.y),Math.floor(p.z))))dead=true;
+    if(dead&&a.magic){ // 魔法箭射中的地方天降小剑雨！
+      swordRain(a.m.position.x,a.m.position.z,I.infinity_sword,4,'rgb(190,110,255)',5);
+    }
     if(dead){mobsGroup.remove(a.m);a.m.material.dispose();arrows.splice(i,1);}
   }
 }
@@ -1581,107 +2586,569 @@ function makeHpSprite(){
   sp.scale.set(1.35,0.32,1);sp.visible=false;
   return {sp,cv,tex};
 }
-function drawMobHp(m){
-  if(!m.hpBar)m.hpBar=makeHpSprite();
-  const {sp,cv,tex}=m.hpBar;
-  const ctx=cv.getContext('2d');
-  ctx.clearRect(0,0,76,18);
-  ctx.fillStyle='rgba(0,0,0,0.45)';ctx.fillRect(0,2,76,16);
-  const halfs=Math.max(0,Math.ceil(m.hp/m.maxHp*10));
-  for(let i=0;i<5;i++){
-    const v=halfs-i*2;
-    drawBarIcon(ctx,2+i*14,'heart',v>=2?2:(v===1?1:0));
-  }
-  tex.needsUpdate=true;
-  sp.visible=true;
-  m.hpShowT=4;
+
+
+// ---------------- ✨ 附魔装备/传说武器闪光粒子 ----------------
+const sparkleGeo=new THREE.BoxGeometry(0.07,0.07,0.07);
+const sparkleMats={};
+function spawnSparkle(x,y,z,color){
+  let mat=sparkleMats[color];
+  if(!mat){mat=new THREE.MeshBasicMaterial({color:new THREE.Color(color),transparent:true});sparkleMats[color]=mat;}
+  const m=new THREE.Mesh(sparkleGeo,mat.clone());
+  m.position.set(x,y,z);
+  particles.push({m,vx:(Math.random()-0.5)*0.5,vy:Math.random()*1.4+0.5,vz:(Math.random()-0.5)*0.5,
+    life:0.35+Math.random()*0.3,sparkle:true});
+  particlesGroup.add(m);
 }
-function hurtMob(m,dmg){
-  if(m.type==='hghast'){showToast('快乐恶魂是好朋友，不会受伤 ❤️');return;}
-  m.hp-=dmg;m.flashT=0.4;
-  sfx.hit();
-  if(m.type!=='dragon'&&m.type!=='crystal'){
-    drawMobHp(m);
-    if(m.hpBar.sp.parent!==m.group){m.group.add(m.hpBar.sp);m.hpBar.sp.position.set(0,m.h+0.5,0);}
+let sparkleT=0;
+function swordSparkleTick(dt){
+  sparkleT+=dt;
+  if(sparkleT<0.07)return;
+  sparkleT=0;
+  const id=heldItemId();
+  let cols=null;
+  if(id===I.infinity_sword)cols=['#e0b0ff','#ffffff','#b46ae8'];
+  else if(id===I.dragon_egg_sword)cols=['#b0ffb0','#ffffff'];
+  else if(id===I.cosmos_sword)cols=['#7dff9a','#e0ffe0','#ffffff'];
+  else if(id===I.gun_infinity)cols=['#e0b0ff','#ffffff']; // 无尽贪婪枪也闪闪发光
+  else if(id===I.god_sword)cols=['#ffe8a0','#ffffff','#ffd94a']; // 创世之剑：白金色的光
+  else if(id===I.storm_sword)cols=['#a07aff','#e0d0ff','#ffffff']; // 风暴之剑：紫色旋风
+  if(!cols)return;
+  // 在玩家手的方向闪光
+  const fx=-Math.sin(player.yaw),fz=-Math.cos(player.yaw);
+  const rx=Math.cos(player.yaw),rz=-Math.sin(player.yaw);
+  const hx=player.pos.x+fx*0.6+rx*0.35,hy=player.pos.y+1.1,hz=player.pos.z+fz*0.6+rz*0.35;
+  for(let i=0;i<2;i++){
+    spawnSparkle(hx+(Math.random()-0.5)*0.5,hy+(Math.random()-0.5)*0.6,hz+(Math.random()-0.5)*0.5,
+      cols[(Math.random()*cols.length)|0]);
   }
-  // 打铁傀儡它会反击；打村民，附近的铁傀儡都会生气！
-  if(m.type==='golem'){m.angry=true;showToast('😠 铁傀儡生气了！小心它把你打飞！');}
-  if(m.type==='villager'){
-    for(const g2 of mobs)if(!g2.dead&&g2.type==='golem'&&Math.hypot(g2.pos.x-m.pos.x,g2.pos.z-m.pos.z)<24)g2.angry=true;
-    showToast('😠 你打了村民！铁傀儡要来教训你了！');
-  }
-  if(m.type==='dragon'&&crystalsAlive()>0){
-    const nowT=performance.now();
-    if(!window._lastCrystalHint||nowT-_lastCrystalHint>6000){
-      window._lastCrystalHint=nowT;
-      showToast('🐉 末影龙在回血！先打掉柱子上的粉色末影水晶！');
-    }
-  }
-  if(m.type!=='dragon'&&m.type!=='crystal'){ // 末影龙和水晶不会被击退
-    const dx=m.pos.x-player.pos.x,dz=m.pos.z-player.pos.z;
-    const len=Math.hypot(dx,dz)||1;
-    m.vel.x+=dx/len*4;m.vel.z+=dz/len*4;m.vel.y=3;
-  }
-  if(m.hp<=0){
-    killMob(m,false);
-    if(NET.open&&NET.isHost&&m.nid)netBroadcast({t:'mobkill',id:m.nid}); // 房主权威：广播死亡
-  }
-}
-function killMob(m,silent){
-  if(m.dead)return;
-  m.dead=true;
-  mobsGroup.remove(m.group);
-  if(!silent){
-    sfx.mobDie();
-    spawnBlockParticles(m.pos.x,m.pos.y+0.5,m.pos.z,'rgb(200,60,60)');
-    if(NET.roomId&&!NET.isHost)return; // 联机客人：mob 掉落由房主权威生成+广播，本地只播死亡效果
-    if(m.type==='cow'){
-      const n=Math.floor(Math.random()*3); // 0-2 皮革
-      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.leather,n);
-      if(Math.random()<0.25)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.string,1);
-    }else if(m.type==='creaking'){
-      const n=1+Math.floor(Math.random()*2); // 1-2 树脂团
-      spawnDrop(m.pos.x,m.pos.y+0.8,m.pos.z,I.resin_clump,n);
-    }else if(m.type==='turtle'){
-      spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.scute,1);
-    }else if(m.type==='golem'){
-      const n=3+Math.floor(Math.random()*3); // 3-5 铁锭
-      spawnDrop(m.pos.x,m.pos.y+0.8,m.pos.z,I.iron_ingot,n);
-      if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+0.8,m.pos.z,B_FLOWER,1); // 偶尔掉朵小花
-      golemKilled=true;updateTasks();
-    }else if(m.type==='villager'){
-      showToast('😭 村民呜呜地哭了……铁傀儡不会放过你的');
-    }else if(m.type==='zombie'){
-      const n=Math.floor(Math.random()*3); // 0-2 腐肉
-      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.rotten_flesh,n);
-    }else if(m.type==='slime'){
-      const n=1+Math.floor(Math.random()*2); // 1-2 黏液球
-      spawnDrop(m.pos.x,m.pos.y+0.4,m.pos.z,I.slimeball,n);
-    }else if(m.type==='enderman'){
-      if(Math.random()<0.8)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.ender_pearl,1);
-    }else if(m.type==='crystal'){
-      crystalsBroken++;
-      spawnBlockParticles(m.pos.x,m.pos.y+0.5,m.pos.z,'rgb(255,120,235)');
-      spawnBlockParticles(m.pos.x,m.pos.y+0.8,m.pos.z,'rgb(255,220,255)');
-      const left=crystalsAlive();
-      showToast(left>0?'💥 末影水晶碎了！还剩 '+left+' 个':'💥 末影水晶全碎了！末影龙不能回血了，打它！');
-      updateTasks();
-    }else if(m.type==='dragon'){
-      dragonKilled=true;
-      updateBossbar();
-      // 掉龙蛋和一堆末影珍珠
-      const ix=Math.floor(player.pos.x),iz=Math.floor(player.pos.z);
-      const iy=surfaceY(ix,iz)+1;
-      spawnDrop(ix+0.5,iy+0.5,iz+0.5,I.dragon_egg,1);
-      spawnDrop(ix+0.5,iy+0.5,iz+0.5,I.ender_pearl,6);
-      // 岛中心开启返回主世界的传送门
-      setBlock(0,36,0,B_ENDPORTAL);
-      spawnBlockParticles(0.5,37,0.5,'rgb(200,120,255)');
-      showToast('🎉 打败末影龙了！岛中心开启了回家的传送门！');
-      updateTasks();saveGame();
-    }
-  }
-  const idx=mobs.indexOf(m);
-  if(idx>=0)mobs.splice(idx,1);
 }
 
+// ---------------- 🗡 剑雨（无尽贪婪剑/龙蛋之剑特效） ----------------
+const swordRains=[];
+function swordRain(tx,tz,itemId,dmg,pColor,count){
+  itemId=itemId||I.infinity_sword;dmg=dmg||6;pColor=pColor||'rgb(190,110,255)';count=count||10;
+  for(let i=0;i<count;i++){
+    const mat=new THREE.SpriteMaterial({map:getItemTex(itemId),transparent:true});
+    const sp=new THREE.Sprite(mat);
+    sp.scale.set(0.7,0.7,1);
+    const ox=(Math.random()-0.5)*5,oz=(Math.random()-0.5)*5;
+    sp.position.set(tx+ox,0,tz+oz);
+    mobsGroup.add(sp);
+    swordRains.push({sp,y:0,gy:0,delay:i*0.08,dmg,pColor,
+      ground:surfaceY(Math.round(tx+ox),Math.round(tz+oz))+1});
+  }
+  sfx.hit();
+}
+function updateSwordRain(dt){
+  for(let i=swordRains.length-1;i>=0;i--){
+    const s=swordRains[i];
+    if(s.delay>0){s.delay-=dt;s.sp.visible=false;continue;}
+    s.sp.visible=true;
+    if(s.y===0)s.y=s.ground+14; // 从高空开始掉
+    s.y-=22*dt;
+    s.sp.position.y=s.y;
+    s.sp.material.rotation+=dt*8; // 转着掉下来
+    if(s.y<=s.ground){ // 落地：炸伤周围的怪物
+      const p=s.sp.position;
+      spawnBlockParticles(p.x,s.ground,p.z,s.pColor);
+      for(const mob of mobs){
+        if(mob.dead||mob.type==='hghast'||mob.type==='villager')continue;
+        if(Math.hypot(mob.pos.x-p.x,mob.pos.z-p.z)<2.2&&mob.pos.y<s.ground+2.5)hurtMob(mob,s.dmg);
+      }
+      mobsGroup.remove(s.sp);s.sp.material.dispose();
+      swordRains.splice(i,1);
+    }
+  }
+}
+
+// ---------------- 🔫 生存模式枪械（弹道版，区别于枪战模式 raycast 版） ----------------
+const bulletGeo=new THREE.BoxGeometry(0.08,0.08,0.3);
+// 每种枪的本领：伤害/速度/颜色/一次几颗/散开程度/要不要子弹（运行时才查，因为物品注册得晚）
+function gunConf(id){
+  if(id===I.gun_pistol)return {dmg:6,speed:40,color:0xffd860,n:1,spread:0};
+  if(id===I.gun_rifle)return {dmg:10,speed:50,color:0xffd860,n:1,spread:0};
+  if(id===I.gun_shotgun)return {dmg:4,speed:34,color:0xffa040,n:5,spread:0.10,life:0.7}; // 一打一大片，但飞不远
+  if(id===I.gun_sniper)return {dmg:25,speed:70,color:0xa0e8ff,n:1,spread:0}; // 超远超痛
+  if(id===I.gun_mg)return {dmg:3,speed:44,color:0xffe080,n:3,spread:0.05}; // 一次突突突三发
+  if(id===I.gun_infinity)return {dmg:12,speed:55,color:0xc576f0,n:1,spread:0,noAmmo:true}; // 不用子弹！
+  return null;
+}
+function shootBullet(gunId){
+  const g=gunConf(gunId);if(!g)return;
+  const dir=new THREE.Vector3(
+    -Math.sin(player.yaw)*Math.cos(player.pitch),
+    Math.sin(player.pitch),
+    -Math.cos(player.yaw)*Math.cos(player.pitch)).normalize();
+  for(let i=0;i<g.n;i++){
+    const d=dir.clone();
+    if(g.spread){d.x+=(Math.random()-0.5)*g.spread;d.y+=(Math.random()-0.5)*g.spread;d.z+=(Math.random()-0.5)*g.spread;d.normalize();}
+    const m=new THREE.Mesh(bulletGeo,new THREE.MeshBasicMaterial({color:g.color}));
+    m.position.set(player.pos.x+d.x*0.8,player.pos.y+PEYE+d.y*0.8,player.pos.z+d.z*0.8);
+    m.lookAt(m.position.clone().add(d));
+    mobsGroup.add(m);
+    arrows.push({m,vel:d.multiplyScalar(g.speed),life:g.life||2.5,dmg:g.dmg,bullet:true});
+  }
+  // 枪口火光
+  spawnBlockParticles(player.pos.x+dir.x-0.3,player.pos.y+PEYE-0.3,player.pos.z+dir.z-0.3,
+    gunId===I.gun_infinity?'rgb(200,120,255)':'rgb(255,200,60)');
+  sfx.place('stone'); // 砰！
+}
+
+// ---------------- 🔱 长矛冲刺（手持长矛前进撞击） ----------------
+let spearVM=null,itemPlaneVM=null,handLastId=-2,spearBobT=0; // 长矛第一人称视图（与枪战 handView 共存）
+const SPEAR_HEAD_COLOR={wood_spear:0xa5824d,stone_spear:0x8a8a8a,iron_spear:0xe8e8e8,gold_spear:0xffd94a,diamond_spear:0x5ad8d8,netherite_spear:0x574b5e,infinity_spear:0xb46ae8};
+function updateHandItem(){
+  if(!spearVM)return;
+  const id=heldItemId()||0;
+  if(id===handLastId)return;
+  handLastId=id;
+  const it=id?ITEMS[id]:null;
+  const isSpear=it&&it.toolType==='spear';
+  spearVM.visible=!!isSpear;
+  itemPlaneVM.visible=!isSpear&&!!it&&!!it.icon;
+  if(isSpear){
+    spearVM.userData.headMat.color.setHex(SPEAR_HEAD_COLOR[it.key]||0xa5824d);
+  }else if(itemPlaneVM.visible){
+    const tmp=document.createElement('canvas');tmp.width=16;tmp.height=16;
+    drawItemIcon(tmp.getContext('2d'),id);
+    const cv=document.createElement('canvas');cv.width=32;cv.height=32;
+    const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(tmp,0,0,32,32);
+    if(itemPlaneVM.material.map)itemPlaneVM.material.map.dispose();
+    itemPlaneVM.material.map=new THREE.CanvasTexture(cv);
+    itemPlaneVM.material.map.magFilter=THREE.NearestFilter;
+    itemPlaneVM.material.needsUpdate=true;
+  }
+}
+function updateHandTick(dt){
+  updateHandItem();
+  const hg=spearVM?spearVM._group:null;
+  if(!hg)return;
+  const it=handLastId>0?ITEMS[handLastId]:null;
+  const isSpear=it&&it.toolType==='spear';
+  hg.visible=!!(started&&(isSpear||itemPlaneVM.visible));
+  if(!hg.visible)return;
+  // 走路时手轻轻晃动（与枪战 handView 独立）
+  const spd=Math.hypot(player.vel.x,player.vel.z);
+  spearBobT+=dt*(2+spd*1.5);
+  hg.position.y=Math.sin(spearBobT)*0.012*Math.min(1,spd/4);
+  if(isSpear){
+    // 🔱 按住挖掘键或冲刺时：矛放平、尖头对准正前方（戳刺姿势！），平时斜扛着
+    const charging=spd>4.5||mining;
+    spearVM.rotation.x=lerp(spearVM.rotation.x,charging?-Math.PI/2+0.22:-0.5,clamp(dt*8,0,1));
+    spearVM.rotation.z=lerp(spearVM.rotation.z,charging?0:-0.35,clamp(dt*8,0,1));
+    spearVM.position.y=lerp(spearVM.position.y,charging?-0.3:-0.45,clamp(dt*8,0,1));
+    spearVM.position.z=lerp(spearVM.position.z,charging?-0.78:-0.6,clamp(dt*8,0,1));
+  }
+}
+// 🔱 长矛戳刺：按住挖掘键把矛横过来戳，或者冲刺撞过去——矛尖对准的怪就受伤！速度越快伤害越高！
+let ramCd=0;
+function spearRamTick(dt){
+  if(ramCd>0)ramCd-=dt;
+  const id=heldItemId();
+  const it=id?ITEMS[id]:null;
+  if(!it||it.toolType!=='spear'||!started||player.dead||!inputEnabled())return;
+  const spd=Math.hypot(player.vel.x,player.vel.z);
+  if((spd<4.5&&!mining)||ramCd>0)return; // 要么冲刺撞，要么按住挖掘键戳
+  const fx=-Math.sin(player.yaw),fz=-Math.cos(player.yaw);
+  for(const m of mobs){
+    if(m.dead)continue;
+    const dx=m.pos.x-player.pos.x,dz=m.pos.z-player.pos.z;
+    const d=Math.hypot(dx,dz);
+    if(d>2.6||d<0.01)continue;
+    if((dx*fx+dz*fz)/d<0.5)continue; // 只戳矛尖对准的正前方
+    if(Math.abs(m.pos.y-player.pos.y)>2.5)continue;
+    const dmg=Math.round(it.dmg*(1+spd*0.22+(!player.onGround?0.5:0))); // 越快越痛！
+    hurtMob(m,dmg);
+    sfx.hit();
+    spawnBlockParticles(m.pos.x,m.pos.y+1,m.pos.z,'rgb(255,220,120)');
+    if(!m.dead){m.vel.x+=dx/d*4;m.vel.z+=dz/d*4;} // 被撞飞一点
+    ramCd=0.5; // 半秒才能再撞一次
+    break;
+  }
+}
+
+// ---------------- 🧪 酿造台 + 药水（喝/扔） ----------------
+const BREWS=[ // 每种药水要的材料（要放在酿造台上做）
+  {id:'potion_heal',  ico:'❤️',ing:{gold_ingot:1,carrot:1},  desc:'喝一口回血'},
+  {id:'potion_jump',  ico:'🐇',ing:{slimeball:1,carrot:1},  desc:'跳得更高（60秒）'},
+  {id:'potion_speed', ico:'💨',ing:{redstone:1,bread:1},     desc:'跑得更快（60秒）'},
+  {id:'potion_poison',ico:'☠️',ing:{rotten_flesh:1,slimeball:1},desc:'扔出去毒怪物'},
+  {id:'potion_harm',  ico:'💥',ing:{rotten_flesh:1,redstone:1}, desc:'扔出去炸伤怪物'},
+  {id:'potion_slowfall',ico:'🪶',ing:{string:1,leather:1},   desc:'慢慢飘下来（60秒）'}];
+function openBrew(){
+  openPanel('brewPanel');
+  const el=$('brewList');el.innerHTML='';
+  for(const b of BREWS){
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;background:#2a2a3a;border-radius:8px;padding:6px 10px;color:#fff;font-size:14px';
+    const needs=Object.keys(b.ing).map(k=>ITEMS[I[k]].name+'×'+b.ing[k]).join(' + ');
+    const can=gameMode==='creative'||Object.keys(b.ing).every(k=>countItemTotal(I[k])>=b.ing[k]);
+    row.innerHTML='<span style="font-size:22px">'+b.ico+'</span><div style="flex:1"><div>'+ITEMS[I[b.id]].name+' <span class="hint" style="display:inline">('+b.desc+')</span></div><div class="hint">需要：'+needs+'</div></div>';
+    const btn=document.createElement('button');
+    btn.textContent='🧪 酿造';
+    btn.style.cssText='font-family:inherit;padding:6px 14px;border:none;border-radius:8px;cursor:pointer;color:#fff;background:'+(can?'#7a3aa0':'#555');
+    btn.addEventListener('click',()=>doBrew(b));
+    btn.addEventListener('touchstart',e=>{e.preventDefault();doBrew(b);},{passive:false});
+    row.appendChild(btn);
+    el.appendChild(row);
+  }
+}
+function doBrew(b){
+  if(gameMode!=='creative'){
+    for(const k of Object.keys(b.ing)){
+      if(countItemTotal(I[k])<b.ing[k]){showToast('🧪 材料不够！需要 '+ITEMS[I[k]].name+'×'+b.ing[k]);return;}
+    }
+    for(const k of Object.keys(b.ing))takeItemFromInv(I[k],b.ing[k]);
+  }
+  giveItemToInv(I[b.id],1);
+  sfx.equip();
+  showToast('🧪 咕嘟咕嘟… '+ITEMS[I[b.id]].name+' 酿好了！');
+  openBrew();refreshAll();
+}
+// ---------------- 喝药水 ----------------
+function drinkPotion(kind){
+  if(gameMode!=='creative')consumeHeld(1);
+  sfx.equip();
+  if(kind==='heal'){
+    player.hp=Math.min(player.maxHp,player.hp+6);
+    showToast('❤️ 治疗药水！回复了 3 颗心');
+  }else if(kind==='jump'){
+    player.jumpT=60;showToast('🐇 跳跃药水！60 秒跳得更高！');
+  }else if(kind==='speed'){
+    player.speedT=60;showToast('💨 速度药水！60 秒跑得飞快！');
+  }else if(kind==='slow'){
+    player.slowT=60;showToast('🪶 缓降药水！60 秒慢慢飘下来，摔不伤！');
+  }else if(kind==='harm'||kind==='poison'){ // 攻击药水是扔出去的！
+    throwPotion(kind);
+  }
+  refreshAll();
+}
+// ---------------- 🧪 扔出去的药水（会飞出去，啪地炸开！） ----------------
+const splashPots=[];
+const splashGeo=new THREE.BoxGeometry(0.25,0.25,0.25);
+function throwPotion(kind){
+  const color=kind==='harm'?0x8a2a8a:0x4ac94a;
+  const mm=new THREE.Mesh(splashGeo,new THREE.MeshBasicMaterial({color}));
+  mm.position.set(player.pos.x,player.pos.y+1.5,player.pos.z);
+  const cp=Math.cos(player.pitch);
+  const dir=new THREE.Vector3(-Math.sin(player.yaw)*cp,Math.sin(player.pitch)+0.18,-Math.cos(player.yaw)*cp).normalize();
+  mobsGroup.add(mm);
+  splashPots.push({m:mm,vel:dir.multiplyScalar(13),life:4,kind});
+  showToast(kind==='harm'?'💥 扔出了伤害药水！':'☠️ 扔出了毒药！');
+}
+function updateSplash(dt){
+  for(let i=splashPots.length-1;i>=0;i--){
+    const p=splashPots[i];
+    p.life-=dt;
+    p.vel.y-=15*dt; // 药水会划一道弧线飞出去
+    p.m.position.x+=p.vel.x*dt;p.m.position.y+=p.vel.y*dt;p.m.position.z+=p.vel.z*dt;
+    const pos=p.m.position;
+    let boom=p.life<=0;
+    if(!boom&&isSolidBlock(getBlock(Math.floor(pos.x),Math.floor(pos.y),Math.floor(pos.z))))boom=true;
+    if(!boom)for(const m of mobs){if(!m.dead&&Math.hypot(m.pos.x-pos.x,m.pos.y+0.8-pos.y,m.pos.z-pos.z)<1){boom=true;break;}}
+    if(boom){ // 啪！炸开一圈药水泡泡
+      const col=p.kind==='harm'?'rgb(180,60,220)':'rgb(90,220,90)';
+      for(let k=0;k<14;k++)spawnBlockParticles(pos.x-0.5+Math.random(),pos.y-0.5+Math.random(),pos.z-0.5+Math.random(),col);
+      let n=0;
+      for(const m of mobs){
+        if(m.dead)continue;
+        if(Math.hypot(m.pos.x-pos.x,m.pos.y+0.8-pos.y,m.pos.z-pos.z)<4){
+          if(p.kind==='harm')hurtMob(m,8);else m.poisonT=5;
+          n++;
+        }
+      }
+      if(n>0)showToast(p.kind==='harm'?'💥 啪！伤害药水炸到 '+n+' 只怪物！':'☠️ 啪！'+n+' 只怪物中毒了！');
+      mobsGroup.remove(p.m);p.m.material.dispose();splashPots.splice(i,1);
+    }
+  }
+}
+
+// ---------------- 🧙👁🌪 模组怪物模型（女巫 / HIM / 凋零风暴 / 共生体） ----------------
+function buildWitchModel(){ // 🧙 女巫：紫色长袍+尖尖的帽子，会扔药水
+  const g=new THREE.Group();
+  const robe=new THREE.MeshLambertMaterial({color:0x6a3aa0});
+  const robeD=new THREE.MeshLambertMaterial({color:0x4a2a70});
+  const skin=new THREE.MeshLambertMaterial({color:0x7aa05a}); // 绿绿的皮肤
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.95,0.34),robe);
+  body.position.y=0.88;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.42,0.42),skin);
+  head.position.y=1.6;g.add(head);
+  const nose=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.22,0.1),skin);
+  nose.position.set(0,1.5,-0.27);g.add(nose); // 长鼻子
+  const eyeM=new THREE.MeshLambertMaterial({color:0x8a4ae8}); // 紫色眼睛
+  for(const ex of [-0.09,0.09]){
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.1,0.02),eyeM);
+    eye.position.set(ex,1.64,-0.22);g.add(eye);
+  }
+  // 尖帽子：宽宽帽檐+越来越尖的帽顶
+  const brim=new THREE.Mesh(new THREE.BoxGeometry(0.72,0.08,0.72),robeD);
+  brim.position.y=1.82;g.add(brim);
+  const hat1=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.2,0.44),robeD);
+  hat1.position.y=1.95;g.add(hat1);
+  const hat2=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.3),robeD);
+  hat2.position.set(0.03,2.13,-0.03);g.add(hat2);
+  const hat3=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.16),robeD);
+  hat3.position.set(0.07,2.29,-0.07);g.add(hat3);
+  const arms=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.16,0.16),robe);
+  arms.position.set(0,1.0,-0.22);g.add(arms); // 抱在胸前
+  const legs=[];
+  for(const lx of [-0.13,0.13]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.45,0.16),robeD);
+    leg.position.set(lx,0.22,0);g.add(leg);legs.push(leg);
+  }
+  return {g,legs};
+}
+function buildGolemModel(){ // 铁傀儡：白白壮壮，手臂超长，身上有藤蔓
+  const g=new THREE.Group();
+  const iron=new THREE.MeshLambertMaterial({color:0xd8d8d0});
+  const vine=new THREE.MeshLambertMaterial({color:0x5a8a3a});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.9,0.5),iron);
+  body.position.y=1.35;g.add(body);
+  const patch=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.34,0.52),vine);
+  patch.position.set(0.25,1.2,0);g.add(patch);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.45,0.45),iron);
+  head.position.y=2.1;g.add(head);
+  const nose=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.22,0.14),new THREE.MeshLambertMaterial({color:0xc09060}));
+  nose.position.set(0,2.0,-0.29);g.add(nose);
+  const brow=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.08,0.08),new THREE.MeshLambertMaterial({color:0x3a3a3a}));
+  brow.position.set(0,2.26,-0.24);g.add(brow);
+  const gEyeM=new THREE.MeshLambertMaterial({color:0x3a2a1a}); // 铁傀儡深色眼睛
+  for(const ex of [-0.11,0.11]){
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.1,0.02),gEyeM);
+    eye.position.set(ex,2.14,-0.24);g.add(eye);
+  }
+  const legs=[],arms=[];
+  for(const s of [-1,1]){
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.22,1.1,0.22),iron);
+    arm.position.set(s*0.55,1.25,0);g.add(arm);arms.push(arm);
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.6,0.24),iron);
+    leg.position.set(s*0.2,0.3,0);g.add(leg);legs.push(leg);
+  }
+  return {g,legs,arms};
+}
+function buildHimModel(){ // HIM：白眼史蒂夫，吓人的大魔王
+  const g=new THREE.Group();
+  const skin=new THREE.MeshLambertMaterial({color:0xc9985f});
+  const shirt=new THREE.MeshLambertMaterial({color:0x2a8a8a});
+  const pants=new THREE.MeshLambertMaterial({color:0x3a3ac0});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.28),shirt);
+  body.position.y=1.05;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.42,0.42),skin);
+  head.position.y=1.72;g.add(head);
+  const eyeM=new THREE.MeshBasicMaterial({color:0xffffff}); // 发光的白色眼睛！
+  for(const ex of [-0.1,0.1]){
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.02),eyeM);
+    eye.position.set(ex,1.74,-0.22);g.add(eye);
+  }
+  const hair=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.12,0.44),new THREE.MeshLambertMaterial({color:0x2a1a10}));
+  hair.position.y=1.95;g.add(hair);
+  const legs=[],arms=[];
+  for(const s of [-1,1]){
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.6,0.16),shirt);
+    arm.position.set(s*0.36,1.1,0);g.add(arm);arms.push(arm);
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.7,0.18),pants);
+    leg.position.set(s*0.13,0.35,0);g.add(leg);legs.push(leg);
+  }
+  return {g,legs,arms};
+}
+function buildStormModel(st,wound){ // 凋零风暴：高画质原版风——旋转暴风云壳+旋涡尾+牵引光束+分节触手
+  st=st||1;
+  const g=new THREE.Group();
+  const shades=[0x120820,0x1a0f2c,0x241438,0x2e1a46,0x3a2354].map(c=>new THREE.MeshLambertMaterial({color:c}));
+  const bone=new THREE.MeshLambertMaterial({color:0x3a3344});
+  const eyeM=new THREE.MeshBasicMaterial({color:0xc576ff});
+  const beamM=new THREE.MeshBasicMaterial({color:0xb46ae8,transparent:true,opacity:0.22});
+  function box(w,h,d,mat,x,y,z){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z);g.add(m);return m;
+  }
+  function skull(x,y,z,s,big){ // 精细骷髅头：头盖+眉骨+脸颊+下巴+牙齿+发光紫眼
+    const h=new THREE.Group();
+    const hd=new THREE.Mesh(new THREE.BoxGeometry(0.8*s,0.55*s,0.7*s),shades[2]);h.add(hd);
+    const brow=new THREE.Mesh(new THREE.BoxGeometry(0.84*s,0.14*s,0.74*s),shades[0]);
+    brow.position.y=0.22*s;h.add(brow);
+    for(const sx of [-1,1]){
+      const cheek=new THREE.Mesh(new THREE.BoxGeometry(0.16*s,0.3*s,0.5*s),shades[1]);
+      cheek.position.set(sx*0.34*s,-0.22*s,0.05);h.add(cheek);
+      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.18*s,0.16*s,0.06),eyeM);
+      eye.position.set(sx*0.18*s,0.02,-0.36*s);h.add(eye);
+      if(big){ // 大眼睛外面还有一圈亮边
+        const halo=new THREE.Mesh(new THREE.BoxGeometry(0.26*s,0.24*s,0.03),new THREE.MeshBasicMaterial({color:0x8a3fd0}));
+        halo.position.set(sx*0.18*s,0.02,-0.34*s);h.add(halo);
+      }
+    }
+    const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.56*s,0.22*s,0.5*s),shades[1]);
+    jaw.position.set(0,-0.42*s,0.02);h.add(jaw);
+    for(let t=0;t<3;t++){ // 牙齿
+      const tooth=new THREE.Mesh(new THREE.BoxGeometry(0.1*s,0.12*s,0.08),bone);
+      tooth.position.set((t-1)*0.17*s,-0.3*s,-0.24*s);h.add(tooth);
+    }
+    h.position.set(x,y,z);
+    g.add(h);
+    return h;
+  }
+  function beam(x,y,z,s,tilt){ // 牵引光束：从眼睛射出的半透明紫光柱
+    const b=new THREE.Mesh(new THREE.BoxGeometry(0.34*s,0.34*s,6.5*s),beamM);
+    b.position.set(x,y-0.6*s,z-3.2*s);
+    b.rotation.x=tilt||0.12;
+    g.add(b);
+  }
+  function tentacle(x,z,len,w,phase){ // 分节触手：三节越来越细
+    let py=1.9;
+    for(let seg=0;seg<3;seg++){
+      const sl=len*(0.45-seg*0.1),sw=w*(1-seg*0.25);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(sw,sl,sw),shades[seg%3]);
+      m.position.set(x*(1+seg*0.12),py-sl/2,z*(1+seg*0.12));
+      m.rotation.z=(x>=0?1:-1)*(0.15+seg*0.22)*Math.sign(x||1);
+      m.rotation.x=Math.sin(phase+seg)*0.2;
+      g.add(m);
+      py-=sl*0.92;
+    }
+  }
+  // 发光的命令方块（命脉）
+  const core=box(0.55,0.55,0.55,new THREE.MeshBasicMaterial({color:0xf0a030}),0,0,0);
+  const coreDots=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.14,0.6),new THREE.MeshBasicMaterial({color:0xffe8b0}));
+  g.userData.swirl=[]; // 会转的云块
+  if(st===1){
+    // 第1阶段：凋零抱着命运方块（骨架身体+三颗精细骷髅头）
+    box(0.36,1.25,0.28,shades[1],0,1.1,0); // 脊椎
+    for(let i=0;i<3;i++)box(1.05-i*0.16,0.13,0.22,shades[2],0,1.5-i*0.34,0); // 肋骨
+    box(0.16,0.5,0.16,shades[0],0,0.35,0); // 尾骨
+    for(const s of [-1,1])box(0.14,0.7,0.14,shades[1],s*0.55,1.0,0.05); // 细手臂
+    skull(0,2.15,-0.05,1.0,true);
+    skull(-0.85,1.95,0.08,0.7,false);
+    skull(0.85,1.95,0.08,0.7,false);
+    core.position.set(0,1.12,-0.3);
+    coreDots.position.set(0,1.12,-0.31);
+    beam(0,2.1,-0.3,0.8,0.05); // 主头的小光束
+  }else{
+    // 第2阶段起：暴风云壳（内圈+外圈会旋转）+旋涡尾巴
+    const heartS=1.1+st*0.22;
+    box(heartS,heartS*0.9,heartS,shades[1],0,2.5,0); // 黑核
+    const inner=6+st,outer=8+st*2;
+    for(let i=0;i<inner;i++){
+      const a=(i/inner)*Math.PI*2;
+      const r=heartS*0.75,s=0.7+((i*53)%10)/16+st*0.1;
+      const m=box(s*1.5,s,s*1.3,shades[(i+1)%5],Math.cos(a)*r,2.4+((i*29)%10)/14,Math.sin(a)*r);
+      m.rotation.y=a;
+      g.userData.swirl.push({m,a,r,y:m.position.y,spd:0.5+((i*31)%10)/20});
+    }
+    for(let i=0;i<outer;i++){
+      const a=(i/outer)*Math.PI*2+0.4;
+      const r=heartS*1.15,s=0.5+((i*37)%10)/15+st*0.08;
+      const m=box(s*1.4,s*0.9,s*1.2,shades[i%5],Math.cos(a)*r,2.2+((i*41)%10)/12+st*0.12,Math.sin(a)*r);
+      m.rotation.y=a*1.3;m.rotation.z=(i%3-1)*0.18;
+      g.userData.swirl.push({m,a,r,y:m.position.y,spd:-(0.3+((i*17)%10)/25)});
+    }
+    // 旋涡尾巴：往下越来越窄的一串云块
+    for(let i=0;i<4+Math.min(st,4);i++){
+      const s=Math.max(heartS*(0.75-i*0.12),0.3);
+      box(s,s*0.7,s,shades[(i+2)%5],Math.sin(i*1.3)*0.3,1.9-i*0.55,Math.cos(i*1.3)*0.3);
+    }
+    core.position.set(0,2.35,-(heartS*0.62));
+    coreDots.position.set(0,2.35,-(heartS*0.63));
+    // 三颗主头（第5阶段再加两颗小头）
+    const hd=1.15+st*0.28;
+    const h1=skull(0,2.9+st*0.32,-hd,1.15,true);
+    skull(-(1.2+st*0.28),2.35,-(hd*0.62),0.8,false);
+    skull((1.2+st*0.28),2.35,-(hd*0.62),0.8,false);
+    if(st>=5){
+      skull(-(0.8+st*0.18),3.5+st*0.25,-0.25,0.55,false);
+      skull((0.8+st*0.18),3.5+st*0.25,-0.25,0.55,false);
+    }
+    // 牵引光束：主头一直射，第4阶段起侧边头也射
+    beam(0,2.9+st*0.32,-hd,1.1,0.10);
+    if(st>=4){beam(-(1.2+st*0.28),2.35,-(hd*0.62),0.7,0.2);beam((1.2+st*0.28),2.35,-(hd*0.62),0.7,0.2);}
+    // 分节触手
+    const tn=Math.min(2+st*2,10);
+    for(let i=0;i<tn;i++){
+      const a=(i/tn)*Math.PI*2;
+      tentacle(Math.cos(a)*(0.9+st*0.14),Math.sin(a)*(0.9+st*0.14),(1.0+((i*37)%3)*0.5)*(1+st*0.18),0.24,i);
+    }
+    // 第4阶段起：紫色浮游光点环绕
+    if(st>=4){
+      for(let i=0;i<10;i++){
+        const a=(i/10)*Math.PI*2;
+        const gl=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.16),new THREE.MeshBasicMaterial({color:i%2?0xc576ff:0x8a3fd0}));
+        gl.position.set(Math.cos(a)*(1.5+st*0.22),2.3+Math.sin(i*2.1)*0.5,Math.sin(a)*(1.5+st*0.22));
+        g.add(gl);
+        g.userData.swirl.push({m:gl,a,r:1.5+st*0.22,y:gl.position.y,spd:0.9});
+      }
+    }
+    // 第7阶段：正面撕开发光的大伤口
+    if(wound){
+      const gs=0.8+st*0.1;
+      box(gs,1.8,0.3,new THREE.MeshBasicMaterial({color:0xff6a20}),0,2.0,-(heartS*0.68));
+      box(gs*0.5,1.0,0.34,new THREE.MeshBasicMaterial({color:0xffd090}),0,2.0,-(heartS*0.72));
+      for(const s of [-1,1]){
+        const edge=box(0.42,1.3,0.3,shades[4],s*(gs*0.75),2.0,-(heartS*0.62));
+        edge.rotation.z=s*0.3;
+      }
+    }
+  }
+  g.add(coreDots);
+  return {g,legs:[]};
+}
+// 阶段变化时换一个新身体
+function rebuildStormModel(m){
+  const old=m.group;
+  const nm=buildStormModel(m.stage||1,stormState.wound);
+  nm.g.position.copy(old.position);
+  nm.g.rotation.y=old.rotation.y;
+  nm.g.scale.copy(old.scale);
+  mobsGroup.remove(old);
+  mobsGroup.add(nm.g);
+  m.group=nm.g;
+  if(m.hpBar&&m.hpBar.sp){nm.g.add(m.hpBar.sp);m.hpBar.sp.position.set(0,m.h+1.5,0);}
+}
+function buildSymbioteModel(){ // 凋零风暴共生体：小小的黑色飞行怪物
+  const g=new THREE.Group();
+  const dark=new THREE.MeshLambertMaterial({color:0x2a1a38});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.9,0.4),dark);
+  body.position.y=0.9;g.add(body);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.4,0.4),dark);
+  head.position.y=1.6;g.add(head);
+  const eyeM=new THREE.MeshBasicMaterial({color:0xc576f0});
+  for(const ex of [-0.1,0.1]){
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.02),eyeM);
+    eye.position.set(ex,1.62,-0.21);g.add(eye);
+  }
+  for(const s of [-1,1]){ // 小翅膀
+    const w=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.1,0.3),dark);
+    w.position.set(s*0.5,1.1,0.1);g.add(w);
+  }
+  return {g,legs:[]};
+}
+
+// ---------------- ✋ 第一人称手持（长矛视图 + 物品面片，与枪战 handView 并行） ----------------
+let spearInitDone=false;
+function initSpearView(){
+  if(spearInitDone||!camera)return;
+  spearInitDone=true;
+  const hg=new THREE.Group();
+  camera.add(hg);
+  // 普通物品：画着图标的小面片
+  itemPlaneVM=new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.34),
+    new THREE.MeshBasicMaterial({transparent:true,alphaTest:0.1}));
+  itemPlaneVM.position.set(0.38,-0.3,-0.62);
+  itemPlaneVM.rotation.set(0.1,-0.35,0.15);
+  hg.add(itemPlaneVM);
+  // 🔱 长矛：3D 的！长长的木杆+材料颜色的矛头（像原版拿三叉戟一样）
+  spearVM=new THREE.Group();
+  const shaft=new THREE.Mesh(new THREE.BoxGeometry(0.035,1.15,0.035),new THREE.MeshLambertMaterial({color:0x8a6a3a}));
+  spearVM.add(shaft);
+  const headMat=new THREE.MeshLambertMaterial({color:0xa5824d});
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.2,0.07),headMat);
+  head.position.y=0.65;spearVM.add(head);
+  const tip=new THREE.Mesh(new THREE.BoxGeometry(0.042,0.1,0.042),headMat);
+  tip.position.y=0.79;spearVM.add(tip);
+  spearVM.userData.headMat=headMat;
+  spearVM.position.set(0.38,-0.45,-0.6);
+  spearVM.rotation.set(-0.5,0,-0.35); // 平时斜着扛在手上
+  spearVM.visible=false;
+  hg.add(spearVM);
+  hg.visible=false;
+  spearVM._group=hg; // 独立视图组（不与枪战 handView 抢 handGroup）
+}
