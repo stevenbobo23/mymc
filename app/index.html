@@ -180,55 +180,69 @@
 </div>
 
 <!-- 模组选择面板 -->
-<div id="modPanel" class="panel hidden" style="z-index:150">
+<div id="modPanel" class="panel hidden" style="z-index:150;width:min(880px,96vw)">
   <button class="closeX" data-close="modPanel">×</button>
   <h3>🧩 模组选择</h3>
-  <div class="hint">点一下就能开关模组，选好了再去开始游戏！<br>模组开了以后，创造物品库里就有模组的东西啦 ✨</div>
-  <div class="mod-row" data-mod="him">
-    <span class="mod-check">✅</span>
-    <span><b>👁 HIM模组</b><br><span class="mod-desc">HIM刷怪蛋：放出白眼大魔王！他会用⚡闪电、🗻黑曜石尖刺打你，还会瞬移！打败他掉<b>创世装备</b>（比无尽贪婪还厉害）</span></span>
+  <div class="hint" style="color:#aaa;font-size:12px;margin-bottom:10px">点卡片即可开关（长说明把鼠标停在卡片上看），开着就能进游戏玩到 ✨</div>
+  <div class="mod-grid">
+    <div class="mod-row" data-mod="him" title="HIM刷怪蛋：放出白眼大魔王！他会用闪电、黑曜石尖刺打你，还会瞬移！打败他掉创世装备（比无尽贪婪还厉害）">
+      <span class="mod-ico">👁</span>
+      <span class="mod-txt"><b>HIM 模组</b><span class="mod-desc">白眼大魔王：闪电瞬移，掉落最强创世装备</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="storm" title="合成祭坛召唤凋零风暴！它会吞方块变大，还会放共生体。合成恐怖炸弹炸开它，钻进身体打掉命令方块就能赢，得到风暴之心！">
+      <span class="mod-ico">🌪</span>
+      <span class="mod-txt"><b>凋零风暴</b><span class="mod-desc">吞方块的风暴Boss，恐怖炸弹讨伐，掉风暴之心</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="vein" title="挖一个矿石，连在一起的所有一样的矿石会一起掉出来！砍树也一样，砍一块木头整棵树都倒！最多连锁128个方块～">
+      <span class="mod-ico">⛏️</span>
+      <span class="mod-txt"><b>连锁采集</b><span class="mod-desc">挖一个连锁一整片，砍树整棵倒</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="real" title="像真的世界一样！方块和生物都有影子，阳光暖暖的金黄色，颜色像电影一样好看，水也更清更透明～">
+      <span class="mod-ico">🌍</span>
+      <span class="mod-txt"><b>逼真光影</b><span class="mod-desc">实时影子+暖阳光+清澈水，电影感画质</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="oneblock" title="开局只有脚下一格神奇的方块！挖掉它马上长出新的，还会随机掉一种方块。越挖越好：泥土→石头→铁矿→钻石！打败末影龙就通关！">
+      <span class="mod-ico">☝️</span>
+      <span class="mod-txt"><b>单格方块生存</b><span class="mod-desc">开局只有一个方块，越挖越好，打龙通关</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="oredim" title="用铁块/金块/红石块/绿宝石块/下界合金块/无尽贪婪块搭一个门框（像下界传送门那样围一圈），再用打火石（铁锭+煤炭合成）点一下，就能去全是那种矿石的维度！挖矿天堂～">
+      <span class="mod-ico">🌀</span>
+      <span class="mod-txt"><b>矿石维度</b><span class="mod-desc">矿物块搭门+打火石点燃，直达挖矿天堂</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="copy" title="放一个复制方块，它头顶上放你想复制的方块，再到另一个地方放一个复制方块——唰！两个复制方块中间全部变成那个方块！用完会掉回来，可以一直用～">
+      <span class="mod-ico">📋</span>
+      <span class="mod-txt"><b>复制方块</b><span class="mod-desc">两个复制方块之间，瞬间填充同种方块</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="moretnt" title="16种新TNT！超级大大、火焰、冰冻、雷电、怪物、动物、钻石、房子、彩虹、洪水、岩浆、黑洞、烟花、美食、宝箱、传送TNT！放地上点一下就触发～">
+      <span class="mod-ico">🧨</span>
+      <span class="mod-txt"><b>更多 TNT</b><span class="mod-desc">16 种新 TNT：房子/黑洞/烟花/洪水…</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="armor" title="5种新材料装备！红石、煤炭、绿宝石、铜、青金石，每种都有头盔、胸甲、护腿、靴子、剑、镐、斧、铲、锄头！铜矿石和青金石矿石世界里一直都有～">
+      <span class="mod-ico">🛡️</span>
+      <span class="mod-txt"><b>更多盔甲</b><span class="mod-desc">5 种新材质套装：铜/青金石/红石…</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="titan" title="世界里会随机出现超级大的泰坦！僵尸泰坦、骷髅泰坦、苦力怕泰坦、蜘蛛泰坦、铁傀儡泰坦、坚守者泰坦，还有会飞的凋零斯拉！都有10万滴血！黑曜石镐还能挖动基岩，做出最强基岩装备！">
+      <span class="mod-ico">🗿</span>
+      <span class="mod-txt"><b>泰坦模组</b><span class="mod-desc">巨型泰坦 Boss 来袭，黑曜石装备讨伐</span></span>
+      <span class="mod-check">✅</span>
+    </div>
+    <div class="mod-row" data-mod="lucky" title="三种幸运方块：幸运方块、超级幸运方块、倒霉方块！挖掉可能掉超级装备、变出小房子，也可能被闪电劈、被TNT炸！">
+      <span class="mod-ico">🍀</span>
+      <span class="mod-txt"><b>幸运方块</b><span class="mod-desc">幸运/超级/倒霉方块，开出惊喜或惊吓</span></span>
+      <span class="mod-check">✅</span>
+    </div>
   </div>
-  <div class="mod-row" data-mod="storm">
-    <span class="mod-check">✅</span>
-    <span><b>🌪 凋零风暴模组</b><br><span class="mod-desc">合成祭坛召唤凋零风暴！它会吞方块变大，还会放共生体。合成💣恐怖炸弹炸开它，钻进身体打掉命令方块就能赢，得到💜风暴之心！</span></span>
-  </div>
-  <div class="mod-row" data-mod="vein">
-    <span class="mod-check">✅</span>
-    <span><b>⛏️ 连锁采集模组</b><br><span class="mod-desc">挖一个矿石，<b>连在一起的所有一样的矿石</b>会一起掉出来！砍树也一样，砍一块木头整棵树都倒！一下子最多连锁128个方块～</span></span>
-  </div>
-  <div class="mod-row" data-mod="real">
-    <span class="mod-check">✅</span>
-    <span><b>🌍 逼真光影模组</b><br><span class="mod-desc">像真的世界一样！方块和生物都有<b>影子</b>，☀️阳光暖暖的金黄色，颜色像电影一样好看，水也更清更透明～</span></span>
-  </div>
-  <div class="mod-row" data-mod="oneblock">
-    <span class="mod-check">✅</span>
-    <span><b>☝️ 单格方块生存</b><br><span class="mod-desc">开局只有<b>脚下一格神奇的方块</b>！挖掉它马上长出新的，还会随机掉一种方块。越挖越好：泥土→石头→铁矿→钻石！用它搭出你的世界，最后去打败🐉末影龙就通关！</span></span>
-  </div>
-  <div class="mod-row" data-mod="oredim">
-    <span class="mod-check">✅</span>
-    <span><b>🌀 矿石维度模组</b><br><span class="mod-desc">用<b>铁块/金块/红石块/绿宝石块/下界合金块/无尽贪婪块</b>搭一个门框（像下界传送门那样围一圈），再用🔥<b>打火石</b>（铁锭+煤炭合成）点一下，就能去全是那种矿石的维度！挖矿天堂～</span></span>
-  </div>
-  <div class="mod-row" data-mod="copy">
-    <span class="mod-check">✅</span>
-    <span><b>📋 复制方块模组</b><br><span class="mod-desc">放一个复制方块，<b>它头顶上放你想复制的方块</b>，再到另一个地方放一个复制方块——唰！两个复制方块<b>中间全部变成那个方块</b>！用完会掉回来，可以一直用～</span></span>
-  </div>
-  <div class="mod-row" data-mod="moretnt">
-    <span class="mod-check">✅</span>
-    <span><b>🧨 更多TNT模组</b><br><span class="mod-desc">16种新TNT！💥超级大大、🔥火焰、🧊冰冻、⚡雷电、👹怪物、🐷动物、💎钻石、🏠房子、🌈彩虹、🌊洪水、🌋岩浆、🕳️黑洞、🎆烟花、🍗美食、🎁宝箱、🌀传送TNT！放地上点一下就触发，有的炸天有的变房子有的喷岩浆～</span></span>
-  </div>
-  <div class="mod-row" data-mod="armor">
-    <span class="mod-check">✅</span>
-    <span><b>🛡️ 更多盔甲模组</b><br><span class="mod-desc">5种新材料装备！🔴红石、⚫煤炭、💚绿宝石、🟠铜、🔵青金石，每种都有头盔、胸甲、护腿、靴子、剑、镐、斧、铲、锄头！🟠铜矿石和🔵青金石矿石世界里一直都有，不开模组也能挖～</span></span>
-  </div>
-  <div class="mod-row" data-mod="titan">
-    <span class="mod-check">✅</span>
-    <span><b>🗿 泰坦模组</b><br><span class="mod-desc">世界里会随机出现超级大的泰坦！🧟僵尸泰坦、💀骷髅泰坦、💚苦力怕泰坦、🕷蜘蛛泰坦、🗿铁傀儡泰坦、😱坚守者泰坦，还有会飞的三头魔王👿凋零斯拉！他们都有<b>10万滴血</b>！用⚫黑曜石做黑曜石剑、黑曜石镐、黑曜石盔甲……黑曜石镐还能<b>挖动基岩</b>！用基岩做出最强的基岩装备！</span></span>
-  </div>
-  <div class="mod-row" data-mod="lucky">
-    <span class="mod-check">✅</span>
-    <span><b>🍀 幸运方块模组</b><br><span class="mod-desc">三种幸运方块：🍀幸运方块、✨超级幸运方块、💀倒霉方块！挖掉可能掉<b>超级装备</b>、变出小房子，也可能被⚡闪电劈、被TNT炸！</span></span>
-  </div>
-  <button class="pk-diff pk-easy" id="modConfirmBtn" style="margin-top:10px;font-size:18px">✔ 确认，开始游戏！</button>
+  <button class="pk-diff pk-easy" id="modConfirmBtn" style="margin-top:12px;width:100%;font-size:18px">✔ 确认，开始游戏！</button>
+</div>
 </div>
 
 <!-- 联机大厅面板（公开房间，无需邀请码） -->
