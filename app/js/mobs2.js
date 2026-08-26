@@ -278,7 +278,15 @@ const MOB_CONF={
   skeleton:{hp:8,w:0.35,h:1.8,speed:1.8}, // 💀 骷髅：远远地射箭
   creeper:{hp:8,w:0.35,h:1.6,speed:1.9}, // 💚 苦力怕：悄悄靠近然后爆炸
   warden:{hp:500,w:1.0,h:2.9,speed:3.2}, // 😱 坚守者：500颗心！看不见东西，但听得见你！
-  guardian:{hp:15,w:0.6,h:0.7,speed:2.2} // 🐟 守卫者：海底神殿的大眼怪鱼，会放电！
+  guardian:{hp:15,w:0.6,h:0.7,speed:2.2}, // 🐟 守卫者：海底神殿的大眼怪鱼，会放电！
+  // 🗿 泰坦模组：全部 10 万滴血！超级巨大！
+  titan_zombie:{hp:100000,w:2.2,h:11,speed:2.0}, // 🧟 僵尸泰坦
+  titan_skeleton:{hp:100000,w:2.2,h:11,speed:2.2}, // 💀 骷髅泰坦
+  titan_creeper:{hp:100000,w:2.2,h:10,speed:2.3}, // 💚 苦力怕泰坦
+  titan_spider:{hp:100000,w:3.6,h:4.2,speed:2.8}, // 🕷 蜘蛛泰坦
+  titan_golem:{hp:100000,w:3.6,h:15,speed:1.8}, // 🗿 铁傀儡泰坦
+  titan_warden:{hp:100000,w:6,h:18,speed:3.4}, // 😱 坚守者泰坦
+  witherzilla:{hp:100000,w:4.5,h:18,speed:2.8} // 👿 凋零斯拉：三头超级大魔王，会飞！
 };
 let nextNid=1; // mobs 网络 id（房主分配，联机广播用）
 function netMobByNid(nid){for(const m of mobs)if(m.nid===nid&&!m.dead)return m;return null;}
@@ -294,7 +302,13 @@ function spawnMob(type,x,z,y,nid){
     type==='sheep'?buildSheepModel():type==='chicken'?buildChickenModel():
     type==='spider'?buildSpiderModel():type==='skeleton'?buildSkeletonModel():
     type==='creeper'?buildCreeperModel():type==='warden'?buildWardenModel():
-    type==='guardian'?buildGuardianModel():buildCreakingModel();
+    type==='guardian'?buildGuardianModel():
+    type==='titan_zombie'?buildZombieModel():type==='titan_skeleton'?buildSkeletonModel():
+    type==='titan_creeper'?buildCreeperModel():type==='titan_spider'?buildSpiderModel():
+    type==='titan_golem'?buildGolemModel():type==='titan_warden'?buildWardenModel():
+    type==='witherzilla'?buildWitherzillaModel():buildCreakingModel();
+  if(type.slice(0,6)==='titan_')model.g.scale.set(6,6,6); // 🗿 泰坦超级巨大！
+  shadowify(model.g); // 🌍 逼真光影模组开着时，新生物自动投影
   const cf=MOB_CONF[type];
   const mob={
     type,pos:new THREE.Vector3(x+0.5,sy,z+0.5),
@@ -336,7 +350,9 @@ function trySpawnNear(type,px,pz,minD,maxD){
       if(nearWater){spawnMob('turtle',x,z);return;}
     }
     if(type==='creaking'&&(top===B_GRASS||top===B_STONE||top===B_SAND||top===B_COBBLE||top===B_DIRT)&&y>SEA){
-      spawnMob('creaking',x,z);return;
+      const cm=spawnMob('creaking',x,z);
+      cm.heart=findHeartNear(x,y,z)||plantHeartNear(x,y,z); // 🩶 苍白花园生态：出生绑定嘎吱核心
+      return;
     }
     if(type==='zombie'&&(top===B_GRASS||top===B_STONE||top===B_SAND||top===B_COBBLE||top===B_DIRT)&&y>SEA){
       spawnMob('zombie',x,z);return;
@@ -374,7 +390,7 @@ function dynamicSpawner(dt){
     const m=mobs[i];
     if(m.dead)continue;
     const d=Math.hypot(m.pos.x-px,m.pos.z-pz);
-    if(d>96&&m!==player.mounted&&m.type!=='dragon'&&m.type!=='crystal'&&m.type!=='villager'&&m.type!=='golem'&&m.type!=='guardian'){killMob(m,true);continue;}
+    if(d>96&&m!==player.mounted&&m.type!=='dragon'&&m.type!=='crystal'&&m.type!=='villager'&&m.type!=='golem'&&m.type!=='guardian'&&m.type.slice(0,6)!=='titan_'&&m.type!=='witherzilla'){killMob(m,true);continue;}
     if(m.type==='cow')cows++;else if(m.type==='turtle')turtles++;
     else if(m.type==='hghast')ghasts++;else if(m.type==='creaking')creaks++;
     else if(m.type==='zombie')zombies++;else if(m.type==='slime')slimes++;
@@ -394,6 +410,13 @@ function dynamicSpawner(dt){
     if(enders<4&&Math.random()<0.7)trySpawnNear('enderman',px,pz,12,30);
     return;
   }
+  // 🗿 泰坦模组：小概率随机刷泰坦（0.6%）
+  if(modsOn.titan&&Math.random()<0.006){
+    const titans=['titan_zombie','titan_skeleton','titan_creeper','titan_spider','titan_golem','titan_warden','witherzilla'];
+    trySpawnTitan(titans[(Math.random()*titans.length)|0],px,pz);
+  }
+  // 🩶 站在苍白花园里：嘎吱怪刷得更多更近！
+  if(biomeAt(Math.floor(px),Math.floor(pz))===9&&creaks<5){for(let i=0;i<3;i++)trySpawnNear('creaking',px,pz,10,30);}
   const elev=Math.sin((dayTime-0.25)*Math.PI*2);
   const isNight=elev<0.1;
   if(!isNight){
@@ -442,7 +465,14 @@ function updateGhast(m,dt){ // 快乐恶魂：空中漂浮，被骑乘时由主�
   m.group.rotation.y=m.yaw;
   mobFlash(m,dt);
 }
-function updateCreaking(m,dt){ // 嘎吱怪：没人看时才动，天亮消失
+function updateCreaking(m,dt){ // 嘎吱怪：没人看时才动，天亮消失；🩶 苍白花园版还绑定嘎吱核心
+  // 🧡 连着树上的嘎吱核心：核心被挖掉，嘎吱怪就死掉！
+  if(m.heart===undefined)m.heart=findHeartNear(Math.floor(m.pos.x),Math.floor(m.pos.y),Math.floor(m.pos.z)); // 出生只找一次
+  if(m.heart&&getBlock(m.heart.x,m.heart.y,m.heart.z)!==B_CREAK_HEART){
+    for(let i=0;i<16;i++)spawnBlockParticles(m.pos.x,m.pos.y+Math.random()*1.6,m.pos.z,'rgb(200,198,190)');
+    showToast('🩶 嘎吱核心碎了！嘎吱怪化成灰消失啦！');
+    killMob(m,true);return;
+  }
   const elev=Math.sin((dayTime-0.25)*Math.PI*2);
   if(elev>0.12){
     spawnBlockParticles(m.pos.x,m.pos.y+1,m.pos.z,'rgb(120,100,80)');
@@ -453,7 +483,7 @@ function updateCreaking(m,dt){ // 嘎吱怪：没人看时才动，天亮消失
   const dist=Math.hypot(dx,dy,dz);
   const dirc={x:-Math.sin(player.yaw)*Math.cos(player.pitch),y:Math.sin(player.pitch),z:-Math.cos(player.yaw)*Math.cos(player.pitch)};
   const dot=(dx*dirc.x+dy*dirc.y+dz*dirc.z)/(dist||1);
-  m.frozen=(dot>0.5&&dist<36)||player.dead;
+  m.frozen=(dot<-0.5&&dist<36)||player.dead; // 👀 盯着它的眼睛→冻住不动；背对它→它来打你！
   if(!m.frozen&&dist>1.2){
     const ux=dx/dist,uz=dz/dist;
     m.vel.x=ux*m.speed;m.vel.z=uz*m.speed;
@@ -987,6 +1017,7 @@ function updateMobs(dt){
       if(m.dead)continue;
     }
     if(m.type==='hghast'){updateGhast(m,dt);continue;}
+    if(m.type.slice(0,6)==='titan_'||m.type==='witherzilla'){updateTitan(m,dt);continue;} // 🗿 泰坦
     if(m.type==='creaking'){updateCreaking(m,dt);continue;}
     if(m.type==='zombie'||m.type==='enderman'){updateZombie(m,dt);continue;}
     if(m.type==='golem'){updateGolem(m,dt);continue;}
@@ -2381,7 +2412,7 @@ function hurtMob(m,dmg){
       showToast('🐉 末影龙在回血！先打掉柱子上的粉色末影水晶！');
     }
   }
-  if(m.type!=='dragon'&&m.type!=='crystal'&&m.type!=='wstorm'&&m.type!=='him'){ // 末影龙/水晶/凋零风暴/HIM 不会被击退
+  if(m.type!=='dragon'&&m.type!=='crystal'&&m.type!=='wstorm'&&m.type!=='him'&&m.type.slice(0,6)!=='titan_'&&m.type!=='witherzilla'){ // 末影龙/水晶/凋零风暴/HIM/泰坦 不会被击退
     const dx=m.pos.x-player.pos.x,dz=m.pos.z-player.pos.z;
     const len=Math.hypot(dx,dz)||1;
     m.vel.x+=dx/len*4;m.vel.z+=dz/len*4;m.vel.y=3;
@@ -2450,6 +2481,17 @@ function killMob(m,silent){
     }else if(m.type==='guardian'){
       spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,B_PRISM,1+((Math.random()*2)|0)); // 1-2 海晶石
       if(Math.random()<0.4)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.gold_ingot,1); // 偶尔掉金锭
+}else if(m.type==='witherzilla'){
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.diamond,20);
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,B_OBSIDIAN,16);
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,B_BEDROCK,8); // 👿 凋零斯拉掉基岩！
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.titan_soul,4+((Math.random()*3)|0));
+      showToast('🏆🏆🏆 天呐！！你打败了凋零斯拉！掉了好多💜泰坦之魂！可以做全世界最强的泰坦装备啦！');
+    }else if(m.type.slice(0,6)==='titan_'){
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,B_OBSIDIAN,10+((Math.random()*10)|0)); // 🗿 泰坦掉一地黑曜石
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.diamond,3+((Math.random()*6)|0));
+      spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.titan_soul,1+((Math.random()*2)|0));
+      showToast('🏆 哇！你打败了'+(TITAN_NAMES[m.type]||'泰坦')+'！掉了💜泰坦之魂！可以做更厉害的泰坦装备啦！');
     }else if(m.type==='warden'){
       spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.diamond,3+((Math.random()*3)|0)); // 3-5 钻石！
       if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.infinity_ingot,1); // 运气好掉无尽贪婪锭！
@@ -3151,4 +3193,116 @@ function initSpearView(){
   hg.add(spearVM);
   hg.visible=false;
   spearVM._group=hg; // 独立视图组（不与枪战 handView 抢 handGroup）
+}
+
+// ================= yangcraft 移植：泰坦 Boss + 巨人模组 =================
+
+// ---------------- 👿 凋零斯拉模型：超超超大！蓝色的三头大魔王，浑身发着蓝光！ ----------------
+function buildWitherzillaModel(){
+  const g=new THREE.Group();
+  const bone=new THREE.MeshLambertMaterial({color:0x1a3a6a}); // 深蓝色骨架
+  const dark=new THREE.MeshLambertMaterial({color:0x10254a}); // 更深的蓝
+  const glow=new THREE.MeshBasicMaterial({color:0x4ab8ff}); // 发光的亮蓝
+  const spine=new THREE.Mesh(new THREE.BoxGeometry(1.6,6.0,1.1),bone);
+  spine.position.y=9.5;g.add(spine); // 脊柱（好长好高！）
+  for(let i=0;i<5;i++){ // 一排排蓝色骨架，还会发光！
+    const rib=new THREE.Mesh(new THREE.BoxGeometry(6.0-i*0.7,0.6,0.9),dark);
+    rib.position.y=12.4-i*1.15;g.add(rib);
+    const gl=new THREE.Mesh(new THREE.BoxGeometry(6.1-i*0.7,0.15,0.95),glow);
+    gl.position.y=12.4-i*1.15+0.3;g.add(gl);
+  }
+  const h1=new THREE.Mesh(new THREE.BoxGeometry(3.0,3.0,3.0),dark); // 中间超级大头
+  h1.position.set(0,15.6,0);g.add(h1);
+  const h2=new THREE.Mesh(new THREE.BoxGeometry(2.2,2.2,2.2),dark); // 两边的大头
+  h2.position.set(-4.0,14.2,0);g.add(h2);
+  const h3=h2.clone();h3.position.x=4.0;g.add(h3);
+  const e1=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.5,0.1),glow); // 发光的蓝眼睛！
+  e1.position.set(-0.6,15.8,-1.51);g.add(e1);
+  const e2=e1.clone();e2.position.x=0.6;g.add(e2);
+  const e3=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.4,0.1),glow);
+  e3.position.set(-4.45,14.4,-1.11);g.add(e3);
+  const e4=e3.clone();e4.position.x=-3.55;g.add(e4);
+  const e5=e3.clone();e5.position.x=3.55;g.add(e5);
+  const e6=e3.clone();e6.position.x=4.45;g.add(e6);
+  for(const cx of [-4.0,0,4.0]){ // 头上发光的蓝色皇冠点点
+    const crown=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.5),glow);
+    crown.position.set(cx,cx===0?17.5:15.7,0);g.add(crown);
+  }
+  const a1=new THREE.Mesh(new THREE.BoxGeometry(0.8,5.5,0.8),bone); // 超长的蓝色手臂
+  a1.position.set(-3.4,8.5,0);g.add(a1);
+  const a2=a1.clone();a2.position.x=3.4;g.add(a2);
+  return {g,legs:[]}; // 👿 凋零斯拉没有腿！它是飘在空中的大魔王～
+}
+
+// ---------------- 🗿 泰坦：超级大怪物！慢慢走过来，一脚把你踩飞！ ----------------
+const TITAN_NAMES={titan_zombie:'🧟 僵尸泰坦',titan_skeleton:'💀 骷髅泰坦',titan_creeper:'💚 苦力怕泰坦',titan_spider:'🕷 蜘蛛泰坦',titan_golem:'🗿 铁傀儡泰坦',titan_warden:'😱 坚守者泰坦',witherzilla:'👿 凋零斯拉'};
+function trySpawnTitan(type,px,pz){
+  if(!modsOn.titan)return;
+  const a=Math.random()*Math.PI*2,d=24+Math.random()*14;
+  const x=Math.floor(px+Math.cos(a)*d),z=Math.floor(pz+Math.sin(a)*d);
+  const y=surfaceY(x,z);
+  const top=getBlock(x,y,z);
+  if(y>SEA&&top!==B_WATER&&top!==B_LAVA&&BLOCKS[top]&&BLOCKS[top].solid){
+    spawnMob(type,x,z);
+    showToast('🌍 轰隆隆！大地震动了！'+(TITAN_NAMES[type]||'泰坦')+'在附近出现了！快跑！！');
+  }
+}
+function updateTitan(m,dt){ // 🗿 泰坦：慢慢走过来，一脚把你踩飞！凋零斯拉会飞！
+  m.atkT-=dt;
+  const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
+  const dist=Math.hypot(dx,dz);
+  const reach=(m.type==='witherzilla'?7:5); // 泰坦手长脚长，老远就能打到你
+  if(dist<70&&dist>reach&&!player.dead&&gameMode!=='creative'){ // 追击
+    const ux=dx/dist,uz=dz/dist;
+    m.vel.x=ux*m.speed;m.vel.z=uz*m.speed;
+    m.moving=true;m.walkT+=dt*3;
+    m.yaw=Math.atan2(-ux,-uz);
+  }else{
+    m.vel.x*=0.5;m.vel.z*=0.5;m.moving=false;
+  }
+  if(m.type==='witherzilla'){ // 👿 凋零斯拉在空中飞，追着你跑！
+    const ty=surfaceY(Math.floor(m.pos.x),Math.floor(m.pos.z))+9;
+    m.vel.y+=((ty-m.pos.y)*0.6-m.vel.y)*Math.min(1,dt*2);
+    if(dist<50&&Math.random()<dt*4)spawnBlockParticles(m.pos.x,m.pos.y+14,m.pos.z,'rgb(74,184,255)');
+  }else{
+    m.vel.y-=22*dt;m.vel.y=Math.max(m.vel.y,-30);
+  }
+  m.onGround=false;m.blocked=false;
+  mobMoveAxis(m,'x',m.vel.x*dt);
+  mobMoveAxis(m,'z',m.vel.z*dt);
+  mobMoveAxis(m,'y',m.vel.y*dt);
+  if(m.blocked&&m.onGround&&m.type!=='witherzilla')m.vel.y=7; // 泰坦跳得超级高，墙挡不住它！
+  if(dist<reach+1&&m.atkT<=0&&!player.dead&&gameMode!=='creative'){
+    damagePlayer(m.type==='witherzilla'?8:5,m.type==='witherzilla'?'被凋零斯拉打了':'被泰坦踩扁了');
+    m.atkT=1.6;
+    if(dist>0.1){player.vel.x+=dx/dist*12;player.vel.z+=dz/dist*12;player.vel.y=7;} // 一脚踹飞！
+    for(let i=0;i<8;i++)spawnBlockParticles(m.pos.x,m.pos.y+0.5,m.pos.z,'rgb(140,140,140)');
+  }
+  if(m.pos.y<-5){killMob(m,true);return;}
+  m.group.position.copy(m.pos);
+  m.group.rotation.y=m.yaw;
+  const sw=Math.sin(m.walkT*6)*(m.moving?0.5:0);
+  for(let l=0;l<m.legs.length;l++)m.legs[l].rotation.x=(l%2===0?sw:-sw);
+  mobFlash(m,dt);
+}
+
+// ---------------- 🩶 嘎吱怪核心绑定（苍白花园生态） ----------------
+function findHeartNear(x,y,z){ // 🧡 找附近树上的嘎吱核心（水平20格、上下8格以内）
+  for(let dx=-20;dx<=20;dx++)for(let dz=-20;dz<=20;dz++)for(let dy=-6;dy<=8;dy++){
+    if(getBlock(x+dx,y+dy,z+dz)===B_CREAK_HEART)return {x:x+dx,y:y+dy,z:z+dz};
+  }
+  return null;
+}
+function plantHeartNear(x,y,z){ // 🧡 附近没有核心？找一棵苍白花园的树，在树干上种一颗嘎吱核心！
+  for(let dx=-16;dx<=16;dx++)for(let dz=-16;dz<=16;dz++){
+    for(let dy=1;dy<=5;dy++){
+      if(getBlock(x+dx,y+dy,z+dz)===B_DARK_LOG){
+        const hx=x+dx,hy=y+dy,hz=z+dz;
+        setBlock(hx,hy,hz,B_CREAK_HEART);
+        spawnBlockParticles(hx+0.5,hy+0.5,hz+0.5,'rgb(255,140,26)');
+        return {x:hx,y:hy,z:hz};
+      }
+    }
+  }
+  return null;
 }

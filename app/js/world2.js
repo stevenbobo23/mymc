@@ -17,10 +17,11 @@ function biomeAt(x,z){
   if(b1>0.72)return 2;
   if(b1>0.60)return 3;
   if(b1>0.48)return 7;
+  if(b2>0.55&&b2<0.68&&b1>0.40&&b1<=0.46)return 9; // 🩶 苍白花园：灰树叶+嘎吱怪的家
   if(b2>0.55)return 8;
   return 0;
 }
-function biomeName(b){return ['橡树平原','小山 ⛰️','白桦林 🌳','花林 🌸','云杉林 🌲','丛林 🌴','金合欢草原 🌾','深色森林 🌑','樱花林 🌸'][b]||'未知';}
+function biomeName(b){return ['橡树平原','小山 ⛰️','白桦林 🌳','花林 🌸','云杉林 🌲','丛林 🌴','金合欢草原 🌾','深色森林 🌑','樱花林 🌸','苍白花园 🩶'][b]||'未知';}
 function terrainH(x,z){
   const h1=fbm(x*0.025,z*0.025,4);
   const h2=fbm(x*0.09+100,z*0.09+100,2);
@@ -44,17 +45,61 @@ const VEINS=[
   [B_DEBRIS,2,12,2,4],
   [B_OBSIDIAN,4,10,2,5], // 黑曜石：最深处，做传送门用
   [B_INFINITY_ORE,2,9,1,3], // 无尽贪婪矿石：超稀有！只在最深处 (y≤10)
-  [B_EMERALD_ORE,4,20,2,5] // 绿宝石矿：比钻石还少一点 (y<20)
+  [B_EMERALD_ORE,4,20,2,5], // 绿宝石矿：比钻石还少一点 (y<20)
+  [B_COPPER_ORE,12,32,4,8], // 🟠 铜矿：很多！石镐就能挖（一直都有，不用开模组）
+  [B_LAPIS_ORE,6,24,3,6] // 🔵 青金石矿（一直都有，不用开模组）
 ];
 // ---------------- 维度：主世界 / 下界 / 末地 ----------------
 let curDim='overworld';
-const DIM_NAMES={overworld:'主世界 🌍',nether:'下界 🔥',end:'末地 🌌'};
+const DIM_NAMES={overworld:'主世界 🌍',nether:'下界 🔥',end:'末地 🌌',iron:'铁矿石维度 ⛏️',gold:'金矿石维度 🟡',diamond:'钻石矿石维度 💎',netherite:'下界合金矿石维度 🟣',redstone:'红石矿石维度 🔴',emerald:'绿宝石矿石维度 💚',infinity:'无尽贪婪矿石维度 💜'};
+const ORE_DIMS={
+  iron:{ore:B_IRON_ORE,frame:B_IRON_BLOCK,sky:0xbfd4e6},
+  gold:{ore:B_GOLD_ORE,frame:B_GOLD_BLOCK,sky:0xf0d080},
+  diamond:{ore:B_DIAMOND_ORE,frame:B_DIAMOND_BLOCK,sky:0xa8e8f0},
+  netherite:{ore:B_DEBRIS,frame:B_NETHERITE_BLOCK,sky:0x6a5a7a},
+  redstone:{ore:B_REDSTONE_ORE,frame:B_REDSTONE_BLOCK,sky:0xd08070},
+  emerald:{ore:B_EMERALD_ORE,frame:B_EMERALD_BLOCK,sky:0x90e0b0},
+  infinity:{ore:B_INFINITY_ORE,frame:B_INFINITY_BLOCK,sky:0xb090e0}
+};
 // 每个维度记住自己的改动和离开时的位置
 const DIMS={
   overworld:{diff:{},fac:{},furn:{},chest:{},pos:null},
   nether:{diff:{},fac:{},furn:{},chest:{},pos:null},
-  end:{diff:{},fac:{},furn:{},chest:{},pos:null}
+  end:{diff:{},fac:{},furn:{},chest:{},pos:null},
+  iron:{diff:{},fac:{},furn:{},chest:{},pos:null},
+  gold:{diff:{},fac:{},furn:{},chest:{},pos:null},
+  diamond:{diff:{},fac:{},furn:{},chest:{},pos:null},
+  netherite:{diff:{},fac:{},furn:{},chest:{},pos:null},
+  redstone:{diff:{},fac:{},furn:{},chest:{},pos:null},
+  emerald:{diff:{},fac:{},furn:{},chest:{},pos:null},
+  infinity:{diff:{},fac:{},furn:{},chest:{},pos:null}
 };
+function genOreDimChunk(cx,cz){ // 矿石维度：满地都是那种矿石！
+  const key=ck(cx,cz);
+  if(chunks[key])return chunks[key];
+  const arr=new Uint8Array(CH*H*CH);
+  const x0=cx*CH,z0=cz*CH;
+  const ore=ORE_DIMS[curDim].ore;
+  for(let lx=0;lx<CH;lx++)for(let lz=0;lz<CH;lz++){
+    const x=x0+lx,z=z0+lz;
+    const h=clamp(Math.floor(16+fbm(x*0.02,z*0.02,3)*18+fbm(x*0.06,z*0.06,2)*5),6,H-10);
+    for(let y=0;y<H;y++){
+      let b=B_AIR;
+      if(y===0)b=B_BEDROCK;
+      else if(y<h)b=hash3(x,y,z)<0.12?B_STONE:ore; // 大部分都是矿石！偶尔夹一点石头
+      else if(y===h)b=ore; // 地面也是矿石！
+      arr[lidx(lx,y,lz)]=b;
+    }
+    // 地表撒一点荧石当灯
+    if(hash2(x*5+1,z*7+3)<0.03&&h+1<H-1)arr[lidx(lx,h+1,lz)]=B_GLOWSTONE;
+  }
+  for(let lx=0;lx<CH;lx++)for(let lz=0;lz<CH;lz++)for(let y=0;y<H;y++){ // 应用玩家改动
+    const d=blockDiff[(x0+lx)+','+y+','+(z0+lz)];
+    if(d!==undefined)arr[lidx(lx,y,lz)]=d;
+  }
+  chunks[key]=arr;
+  return arr;
+}
 function genNetherChunk(cx,cz){ // 下界：下界岩丘陵 + 岩浆湖 + 荧石 + 远古残骸
   const key=ck(cx,cz);
   if(chunks[key])return chunks[key];
@@ -140,7 +185,7 @@ function genEndChunk(cx,cz){ // 末地：末地石浮岛 + 黑曜石柱子 + 中
 }
 // ---------------- 🧩 模组开关 ----------------
 const MODS_KEY='mc_mods_v2';
-let modsOn={him:false,storm:false,lucky:false}; // 不点模组就没有模组内容，选了才有！
+let modsOn={him:false,storm:false,lucky:false,vein:false,real:false,oneblock:false,oredim:false,copy:false,moretnt:false,armor:false,titan:false}; // 不点模组就没有模组内容，选了才有！
 try{Object.assign(modsOn,JSON.parse(localStorage.getItem(MODS_KEY)||'{}'))}catch(e){}
 function saveMods(){try{localStorage.setItem(MODS_KEY,JSON.stringify(modsOn))}catch(e){}}
 // 凋零风暴的状态：它在哪、有没有被炸开口子、体内命令方块还剩几下
@@ -1372,6 +1417,19 @@ function genArenaChunk(cx,cz){
   return arr;
 }
 function genChunkData(cx,cz){
+  if(ORE_DIMS[curDim])return genOreDimChunk(cx,cz); // 矿石维度
+  if(modsOn.oneblock&&curDim==='overworld'){ // ☝️ 单格方块生存：主世界全空，只有玩家放过的方块
+    const key=ck(cx,cz);
+    if(chunks[key])return chunks[key];
+    const arr=new Uint8Array(CH*H*CH);
+    const x0=cx*CH,z0=cz*CH;
+    for(let lx=0;lx<CH;lx++)for(let lz=0;lz<CH;lz++)for(let y=0;y<H;y++){
+      const d=blockDiff[(x0+lx)+','+y+','+(z0+lz)];
+      if(d!==undefined)arr[lidx(lx,y,lz)]=d;
+    }
+    chunks[key]=arr;
+    return arr;
+  }
   if(curDim==='nether')return genNetherChunk(cx,cz);
   if(curDim==='end')return genEndChunk(cx,cz);
   if(gameMode==='shooter'&&curDim==='overworld')return genArenaChunk(cx,cz); // 枪战模式：竞技场
@@ -1433,6 +1491,7 @@ function genChunkData(cx,cz){
     if(bio===6)return TREE_SP.acacia;
     if(bio===7)return TREE_SP.dark;
     if(bio===8)return TREE_SP.cherry;
+    if(bio===9)return [B_DARK_LOG,B_PALE_LEAVES,0.028,5,2,'oak']; // 🩶 苍白花园：深色树干+灰树叶，树很多！
     return TREE_SP.oak;
   }
   function canopyLayers(style,th){
@@ -1450,7 +1509,7 @@ function genChunkData(cx,cz){
     if(style==='dark')return [[th-2,2,false],[th-1,2,false],[th,2,false],[th+1,1,false]]; // 浓密
     return [[th-2,2,true],[th-1,2,true],[th,1,true],[th+1,1,true]];        // oak/樱花
   }
-  const isLeafB=b=>b===B_LEAVES||b===B_SPRUCE_LEAVES||b===B_DARK_LEAVES||b===B_CHERRY_LEAVES;
+  const isLeafB=b=>b===B_LEAVES||b===B_SPRUCE_LEAVES||b===B_DARK_LEAVES||b===B_CHERRY_LEAVES||b===B_PALE_LEAVES;
   for(let tx=x0-3;tx<x0+CH+3;tx++)for(let tz=z0-3;tz<z0+CH+3;tz++){
     const sp=spOf(biomeAt(tx,tz));
     if(hash2(tx*7+1,tz*13+3)>=sp[2])continue;
@@ -1479,6 +1538,10 @@ function genChunkData(cx,cz){
       for(let dy=1;dy<=th;dy++){
         const cur=arr[lidx(txl,ty+dy,tzl)];
         if(cur===B_AIR||isLeafB(cur))arr[lidx(txl,ty+dy,tzl)]=sp[0];
+      }
+      // 🧡 苍白花园的树：树干上长一只"嘎吱核心"眼睛！
+      if(biomeAt(tx,tz)===9&&th>=4&&hash2(tx*3+5,tz*7+11)<0.6){
+        arr[lidx(txl,ty+2,tzl)]=B_CREAK_HEART;
       }
     }
   }
@@ -1759,15 +1822,22 @@ function thunderSound(dist){ // 轰隆隆——越远声音越晚到、越小声
   tone(58,1.8,'sine',vol*0.7,36,delay);
   noiseBurst(0.5,900,vol*0.5,delay+0.05);
 }
-function lightningStrike(){ // 一道闪电劈在附近！
-  const ang=Math.random()*Math.PI*2,dist=8+Math.random()*35;
-  const lx=Math.floor(player.pos.x+Math.cos(ang)*dist),lz=Math.floor(player.pos.z+Math.sin(ang)*dist);
-  const ly=surfaceY(lx,lz);
+function lightningStrike(){ // 一道闪电劈在附近！⚡ 有避雷针就全劈它！
+  const px=Math.floor(player.pos.x),pz=Math.floor(player.pos.z);
+  const rod=findRodNear(px,pz,48); // 附近有避雷针？闪电全部跑去劈它！
+  let lx,lz,ly;
+  if(rod){lx=rod[0];lz=rod[2];ly=rod[1];}
+  else{
+    const ang=Math.random()*Math.PI*2,dist=8+Math.random()*35;
+    lx=Math.floor(player.pos.x+Math.cos(ang)*dist);lz=Math.floor(player.pos.z+Math.sin(ang)*dist);
+    ly=surfaceY(lx,lz);
+  }
   weather.flash=1;
   for(let yy=0;yy<16;yy++)spawnBlockParticles(lx+0.5,ly+1+yy*1.4,lz+0.5,'rgb(255,255,200)');
   spawnBlockParticles(lx+0.5,ly+1,lz+0.5,'rgb(255,240,150)');
   thunderSound(dist);
-  if(dist<10)showToast('⚡ 哇！闪电就劈在你旁边！');
+  if(rod){showToast('⚡ 咔啦！闪电劈中了避雷针！');for(let i=0;i<10;i++)spawnBlockParticles(lx+0.5,ly+1.2,lz+0.5,'rgb(255,255,180)');}
+  else if(dist<10)showToast('⚡ 哇！闪电就劈在你旁边！');
 }
 function updateWeather(dt){
   if(!started)return;
@@ -1883,6 +1953,12 @@ function skyColorAt(t){
 }
 function updateDayNight(dt){
   const elevNow=Math.sin((dayTime-0.25)*Math.PI*2);
+  if(ORE_DIMS[curDim]){ // 矿石维度：固定天色+恒定亮度
+    const c=new THREE.Color(ORE_DIMS[curDim].sky);
+    scene.background.copy(c);scene.fog.color.copy(c);scene.fog.near=30;scene.fog.far=100;
+    sunLight.intensity=1.0;hemiLight.intensity=0.9;ambientLight.intensity=0.5;
+    return;
+  }
   if(curDim==='overworld')dayTime=(dayTime+dt/(elevNow>0?900:300))%1; // 白天7.5分钟，夜晚2.5分钟（白天更长）
   if(curDim==='nether'){ // 下界：永远暗红
     scene.background.setHex(0x38100c);scene.fog.color.setHex(0x38100c);scene.fog.near=20;scene.fog.far=70;
@@ -1938,4 +2014,274 @@ function isVillageChunk(cx,cz){
   const nearSpawn=Math.hypot(vcx-spawnPoint.x,vcz-spawnPoint.z)<400;
   return (cx===svc.cx&&cz===svc.cz)||
     (hash2(cx*7+3,cz*11+5)<(nearSpawn?0.09:0.05)&&vh>SEA+2&&vh<34&&biomeAt(vcx,vcz)!==1);
+}
+
+// ================= yangcraft 移植：传送门 / 火焰 / 火把 / 连锁挖矿 / 单格方块 / 复制方块 =================
+
+// ---------------- 🌀 矿石维度传送门 ----------------
+const orePortalDim={}; // "维度|x,y,z" -> 这个传送门通往哪个矿石维度
+function orePortalKey(x,y,z){return curDim+'|'+x+','+y+','+z;}
+function tryLightOrePortal(bx,by,bz,frame,dim){
+  // 门框所在的竖直平面：沿x方向 或 沿z方向，找到被同种方块围住的空气洞
+  for(const axis of ['x','z']){
+    const start=[];
+    for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){
+      const nx=bx+dx,ny=by+dy,nz=bz+dz;
+      if(getBlock(nx,ny,nz)===B_AIR)start.push([nx,ny,nz]);
+    }
+    for(const s of start){
+      const inPlane=(x,y,z)=>axis==='x'?z===s[2]:x===s[0];
+      const seen=new Set();const region=[];const floorCells=[];const q=[s];
+      let ok=true;
+      while(q.length){
+        const [cx,cy,cz]=q.pop();
+        const k=cx+','+cy+','+cz;
+        if(seen.has(k))continue;
+        seen.add(k);
+        if(!inPlane(cx,cy,cz))continue;
+        const b=getBlock(cx,cy,cz);
+        if(b===B_AIR){
+          region.push([cx,cy,cz]);
+          if(region.length>40){ok=false;break;}
+          q.push([cx+1,cy,cz],[cx-1,cy,cz],[cx,cy+1,cz],[cx,cy-1,cz]);
+        }else if(b!==frame){
+          // 洞的边必须是门框方块——但最底下一排可以是地面（门框搭在地上也行！）
+          if(isSolidBlock(b))floorCells.push(cy);
+          else{ok=false;break;}
+        }
+      }
+      if(!ok||region.length<1)continue;
+      const minY=Math.min(...region.map(c=>c[1]));
+      if(floorCells.some(cy=>cy>=minY))continue; // 不是地板的杂块 → 不算封闭
+      // 点燃！洞里全变成传送门
+      for(const [px,py,pz] of region){
+        setBlock(px,py,pz,B_OREPORTAL);
+        orePortalDim[orePortalKey(px,py,pz)]=dim;
+      }
+      spawnBlockParticles(bx+0.5,by+1,bz+0.5,'rgb(120,220,255)');
+      sfx.place();
+      showToast('🌀 传送门点燃啦！站进去就能去「'+DIM_NAMES[dim]+'」！');
+      return true;
+    }
+  }
+  return false;
+}
+function buildOreDimHome(dim){ // 第一次到矿石维度：造一个小平台和回去的传送门
+  const D1=DIMS[dim];
+  if(!D1||D1.home)return;
+  D1.home=true;
+  const px=Math.floor(player.pos.x),pz=Math.floor(player.pos.z);
+  const py=surfaceY(px,pz)+1;
+  for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)setBlock(px+dx,py-1,pz+dz,B_GLOWSTONE); // 发光地板
+  const frame=ORE_DIMS[dim].frame;
+  for(let dx=0;dx<3;dx++){setBlock(px+dx-1,py,pz+2,frame);setBlock(px+dx-1,py+3,pz+2,frame);}
+  for(let dy=0;dy<4;dy++){setBlock(px-2,py+dy,pz+2,frame);setBlock(px+2,py+dy,pz+2,frame);}
+  for(let dx=0;dx<3;dx++)for(let dy=0;dy<2;dy++){
+    setBlock(px+dx-1,py+1+dy,pz+2,B_OREPORTAL);
+    orePortalDim[orePortalKey(px+dx-1,py+1+dy,pz+2)]=dim;
+  }
+  player.pos.set(px+0.5,py,pz+0.5);player.vel.set(0,0,0);
+}
+
+// ---------------- 🔥 火焰蔓延系统 ----------------
+const fires={}; // "维度|x,y,z" -> 烧了多久
+const FLAMMABLE=new Set([B_LOG,B_BIRCH_LOG,B_SPRUCE_LOG,B_JUNGLE_LOG,B_ACACIA_LOG,B_DARK_LOG,B_CHERRY_LOG,B_LEAVES,B_SPRUCE_LEAVES,B_DARK_LEAVES,B_CHERRY_LEAVES,B_PALE_LEAVES,B_PLANKS,B_WOOL]);
+function igniteFire(x,y,z){
+  if(getBlock(x,y,z)!==B_AIR)return false;
+  setBlock(x,y,z,B_FIRE);
+  fires[curDim+'|'+x+','+y+','+z]=0;
+  sfx.place();
+  spawnBlockParticles(x+0.5,y+0.5,z+0.5,'rgb(255,150,40)');
+  return true;
+}
+let fireTickT=0;
+function fireTick(dt){
+  if(gameState!=='playing'||player.dead)return;
+  // 站在火里会被烧到！
+  const fx=Math.floor(player.pos.x),fy=Math.floor(player.pos.y),fz=Math.floor(player.pos.z);
+  if(getBlock(fx,fy,fz)===B_FIRE||getBlock(fx,fy+1,fz)===B_FIRE){
+    player._fireT=(player._fireT||0)-dt;
+    if(player._fireT<=0){damagePlayer(1,'被火烧到了');player._fireT=0.8;}
+  }
+  // 火烧一会自己灭，还会烧着旁边的木头树叶！
+  fireTickT+=dt;
+  if(fireTickT<0.5)return;
+  fireTickT=0;
+  for(const k in fires){
+    const [dimK,coords]=k.split('|');
+    if(dimK!==curDim)continue;
+    const [x,y,z]=coords.split(',').map(Number);
+    if(getBlock(x,y,z)!==B_FIRE){delete fires[k];continue;}
+    fires[k]+=0.5;
+    if(fires[k]>4+hash3(x,y,z)*3){setBlock(x,y,z,B_AIR);delete fires[k];continue;} // 烧完自己灭了
+    if(Math.random()<0.3){ // 蔓延到旁边的可燃物（包括斜下方的）
+      const flam=[];
+      for(const d of [[1,0,0],[-1,0,0],[0,1,0],[0,0,1],[0,0,-1],[1,-1,0],[-1,-1,0],[0,-1,1],[0,-1,-1]]){
+        const nx=x+d[0],ny=y+d[1],nz=z+d[2];
+        if(FLAMMABLE.has(getBlock(nx,ny,nz)))flam.push([nx,ny,nz]);
+      }
+      if(flam.length){
+        const [nx,ny,nz]=flam[(Math.random()*flam.length)|0];
+        setBlock(nx,ny,nz,B_FIRE);fires[curDim+'|'+nx+','+ny+','+nz]=0;
+      }
+    }
+  }
+}
+
+// ---------------- 🔥 火把照明（跟随式单点光源，性能极好） ----------------
+let torchLight=null,torchScanT=0;
+function torchLightTick(dt){
+  if(!torchLight){torchLight=new THREE.PointLight(0xffb050,0,20);scene.add(torchLight);}
+  torchScanT-=dt;
+  if(torchScanT>0)return;
+  torchScanT=0.6;
+  const px=Math.floor(player.pos.x),py=Math.floor(player.pos.y),pz=Math.floor(player.pos.z);
+  let best=null,bd=14*14;
+  for(let dx=-12;dx<=12;dx++)for(let dy=-6;dy<=6;dy++)for(let dz=-12;dz<=12;dz++){
+    if(getBlock(px+dx,py+dy,pz+dz)===B_TORCH){const d=dx*dx+dy*dy+dz*dz;if(d<bd){bd=d;best=[px+dx+0.5,py+dy+0.8,pz+dz+0.5];}}
+  }
+  if(best){torchLight.position.set(best[0],best[1],best[2]);torchLight.intensity=1.6;}
+  else torchLight.intensity=0;
+}
+
+// ---------------- ⛏️ 连锁采集模组 ----------------
+let chainVein=false; // 防止连锁采集自己套自己
+const VEIN_BLOCKS=new Set([B_COAL_ORE,B_IRON_ORE,B_GOLD_ORE,B_DIAMOND_ORE,B_REDSTONE_ORE,B_EMERALD_ORE,B_DEBRIS,B_INFINITY_ORE,B_COPPER_ORE,B_LAPIS_ORE,B_LOG,B_BIRCH_LOG,B_SPRUCE_LOG,B_JUNGLE_LOG,B_ACACIA_LOG,B_DARK_LOG,B_CHERRY_LOG]);
+function veinMine(x,y,z,b){ // 从 (x,y,z) 开始，把连在一起的一样的方块全挖掉
+  const seen=new Set([x+','+y+','+z]);
+  const queue=[[x,y,z]];
+  let n=0;
+  while(queue.length&&n<128){
+    const [cx,cy,cz]=queue.shift();
+    for(const [dx,dy,dz] of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]]){
+      const nx=cx+dx,ny=cy+dy,nz=cz+dz;
+      const key=nx+','+ny+','+nz;
+      if(seen.has(key))continue;
+      seen.add(key);
+      if(getBlock(nx,ny,nz)!==b)continue;
+      n++;
+      breakBlock(nx,ny,nz,b); // chainVein=true，不会再套娃
+      queue.push([nx,ny,nz]);
+    }
+  }
+  return n;
+}
+
+// ---------------- 📋 复制方块模组 ----------------
+function tryCopyFill(x,y,z){
+  if(!modsOn.copy){showToast('🔒 要先在开始界面打开📋复制方块模组哦！');return;}
+  // 找附近32格内另一个复制方块
+  let other=null,bd=1e9;
+  for(let dx=-32;dx<=32;dx++)for(let dy=-16;dy<=16;dy++)for(let dz=-32;dz<=32;dz++){
+    if(!dx&&!dy&&!dz)continue;
+    if(getBlock(x+dx,y+dy,z+dz)===B_COPIER){
+      const d=Math.abs(dx)+Math.abs(dy)+Math.abs(dz);
+      if(d<bd){bd=d;other=[x+dx,y+dy,z+dz];}
+    }
+  }
+  if(!other){showToast('📋 复制方块放好啦！再到另一个地方放一个，中间就会变出方块哦！');return;}
+  // 想复制的方块：放在任意一个复制方块的头顶上
+  let target=getBlock(x,y+1,z);
+  if(target===B_AIR||target===B_COPIER)target=getBlock(other[0],other[1]+1,other[2]);
+  if(target===B_AIR||target===B_COPIER){showToast('📋 在其中一个复制方块上面放一个你想复制的方块！');return;}
+  if(target===B_BEDROCK){showToast('📋 基岩不能复制哦！');return;}
+  // 两个复制方块中间的区域，全部变成目标方块！
+  const x0=Math.min(x,other[0]),x1=Math.max(x,other[0]);
+  const y0=Math.min(y,other[1]),y1=Math.max(y,other[1]);
+  const z0=Math.min(z,other[2]),z1=Math.max(z,other[2]);
+  if((x1-x0+1)*(y1-y0+1)*(z1-z0+1)>4096){showToast('📋 两个复制方块离太远啦！近一点试试～');return;}
+  const pfxx=Math.floor(player.pos.x),pfyy=Math.floor(player.pos.y),pfzz=Math.floor(player.pos.z);
+  let n=0;
+  for(let bx=x0;bx<=x1;bx++)for(let by=y0;by<=y1;by++)for(let bz=z0;bz<=z1;bz++){
+    if(bx===pfxx&&(by===pfyy||by===pfyy+1)&&bz===pfzz)continue; // 别把自己埋了
+    setBlock(bx,by,bz,target);n++;
+  }
+  // 复制方块完成任务，变回物品，可以再用！
+  setBlock(x,y,z,B_AIR);setBlock(other[0],other[1],other[2],B_AIR);
+  spawnDrop(x+0.5,y+0.5,z+0.5,B_COPIER,1);
+  spawnDrop(other[0]+0.5,other[1]+0.5,other[2]+0.5,B_COPIER,1);
+  spawnBlockParticles(x+0.5,y+1,z+0.5,'rgb(255,140,255)');
+  spawnBlockParticles(other[0]+0.5,other[1]+1,other[2]+0.5,'rgb(255,140,255)');
+  showToast('📋✨ 唰——！中间变出了 '+n+' 个「'+BLOCKS[target].name+'」！');
+}
+
+// ---------------- ☝️ 单格方块生存 ----------------
+let oneBlockPos=null,oneBlockCount=0;
+function oneBlockPick(arr){return arr[(Math.random()*arr.length)|0];}
+function oneBlockRandomBlock(){ // 越挖挖到的方块越好！
+  const c=oneBlockCount;
+  if(c<8)return oneBlockPick([B_GRASS,B_DIRT,B_LOG]);
+  if(c<20)return oneBlockPick([B_DIRT,B_LOG,B_STONE,B_COBBLE,B_COAL_ORE,B_SAND]);
+  if(c<40)return oneBlockPick([B_STONE,B_COBBLE,B_COAL_ORE,B_IRON_ORE,B_BIRCH_LOG,B_SPRUCE_LOG,B_WOOL]);
+  if(c<70)return oneBlockPick([B_IRON_ORE,B_GOLD_ORE,B_REDSTONE_ORE,B_JUNGLE_LOG,B_ACACIA_LOG,B_GLASS,B_GLOWSTONE]);
+  return oneBlockPick([B_GOLD_ORE,B_DIAMOND_ORE,B_EMERALD_ORE,B_OBSIDIAN,B_DARK_LOG,B_CHERRY_LOG,B_GLOWSTONE]);
+}
+function oneBlockBonus(){ // 额外随机掉一个东西
+  const r=Math.random();
+  if(r<0.18)return oneBlockPick([I.bread,I.seeds,I.stick,I.arrow]);
+  if(r<0.28)return oneBlockPick([I.iron_ingot,I.gold_ingot]);
+  if(r<0.32)return I.diamond;
+  return oneBlockRandomBlock();
+}
+function startOneBlock(){ // 开局：高空中只有一格挖不完的神奇方块！
+  const sx=Math.round(spawnPoint.x),sz=Math.round(spawnPoint.z),oy=54;
+  setBlock(sx,oy,sz,B_GRASS);
+  oneBlockPos={x:sx,y:oy,z:sz};
+  oneBlockCount=0;
+  player.pos.set(sx+0.5,oy+2,sz+0.5);
+  player.vel.set(0,0,0);
+  giveItemToInv(I.bread,3);giveItemToInv(B_LOG,2);
+  setTimeout(()=>{if(gameState==='playing')showToast('☝️ 单格方块生存！挖掉神奇方块会马上长出新的，还会随机掉东西！');},2200);
+  setTimeout(()=>{if(gameState==='playing')showToast('🎯 目标：用挖到的方块搭出你的世界，去末地打败🐉末影龙就通关！');},5200);
+}
+function oneBlockTick(){ // 掉下去（没摔死）也会被拉回神奇方块
+  if(!modsOn.oneblock||!oneBlockPos||curDim!=='overworld'||player.dead)return;
+  if(player.pos.y<oneBlockPos.y-10){
+    player.pos.set(oneBlockPos.x+0.5,oneBlockPos.y+2,oneBlockPos.z+0.5);
+    player.vel.set(0,0,0);
+    showToast('☝️ 哎呀掉下去啦！把你拉回神奇方块～');
+  }
+}
+function showOneBlockWin(){
+  showToast('🎉🎉🎉 恭喜通关！你一共挖了 '+oneBlockCount+' 次神奇方块！');
+  for(let i=0;i<40;i++)spawnBlockParticles(player.pos.x+(Math.random()*8-4),player.pos.y+Math.random()*4,player.pos.z+(Math.random()*8-4),'rgb(255,215,0)');
+  sfx.craft();
+}
+
+// ---------------- ⚡ 避雷针 ----------------
+function findRodNear(cx,cz,r){ // 找附近最近的避雷针
+  let best=null,bd=r*r;
+  const py=Math.floor(player.pos.y);
+  for(let dx=-r;dx<=r;dx++)for(let dz=-r;dz<=r;dz++)for(let dy=-8;dy<=8;dy++){
+    const x=cx+dx,y=py+dy,z=cz+dz;
+    if(getBlock(x,y,z)===B_ROD){const d=dx*dx+dz*dz;if(d<bd){bd=d;best=[x,y,z];}}
+  }
+  return best;
+}
+// ---------------- 🌍 逼真光影模组（真实阴影 + 电影色调） ----------------
+let realShadowOn=false;
+function shadowify(o){if(realShadowOn)o.traverse(n=>{if(n.isMesh){n.castShadow=true;n.receiveShadow=true;}});}
+function applyRealMod(on){
+  realShadowOn=on;
+  if(!renderer)return;
+  renderer.shadowMap.enabled=on;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap; // 软软的影子边缘
+  renderer.toneMapping=on?THREE.ACESFilmicToneMapping:THREE.NoToneMapping; // 电影一样的颜色！
+  renderer.toneMappingExposure=on?1.18:1.0;
+  sunLight.castShadow=on;
+  if(on){
+    sunLight.shadow.mapSize.set(1024,1024);
+    const c=sunLight.shadow.camera;
+    c.left=-55;c.right=55;c.top=55;c.bottom=-55;c.near=1;c.far=220;
+    c.updateProjectionMatrix();
+    sunLight.shadow.bias=-0.0015;
+  }
+  // 阳光变成暖暖的金黄色，天更蓝，水更透明
+  sunLight.color.setHex(on?0xffe2b0:0xffffff);
+  hemiLight.color.setHex(on?0xb8dcff:0xcfe8ff);
+  hemiLight.groundColor.setHex(on?0x9a7a55:0x8a6a4a);
+  if(waterMat)waterMat.opacity=on?0.5:0.65;
+  if(chunkGroup)for(const m of chunkGroup.children)if(m.material===solidMat){m.castShadow=on;m.receiveShadow=on;}
+  if(mobsGroup)for(const g of mobsGroup.children)g.traverse(n=>{if(n.isMesh){n.castShadow=on;n.receiveShadow=true;}});
+  solidMat.needsUpdate=true;
 }

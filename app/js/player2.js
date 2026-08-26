@@ -4,7 +4,7 @@ const player={
   pos:new THREE.Vector3(48.5,40,48.5),
   vel:new THREE.Vector3(),
   yaw:0,pitch:0,onGround:false,
-  hp:20,maxHp:20,peakY:40,jumpT:0,speedT:0,slowT:0, // 🧪 药水效果剩余秒数
+  hp:20,maxHp:20,peakY:40,jumpT:0,speedT:0,slowT:0,goldT:0, // 🧪 药水效果剩余秒数（goldT=金苹果护盾）
   inWater:false,headWater:false,
   lastDamage:-99,dead:false,
   mounted:null, // 骑乘中的快乐恶魂
@@ -66,6 +66,7 @@ function physicsStep(dt,input){
   if(player.jumpT>0)player.jumpT-=dt;
   if(player.speedT>0)player.speedT-=dt;
   if(player.slowT>0)player.slowT-=dt;
+  if(player.goldT>0)player.goldT-=dt; // 🍎 金光护盾倒计时
   let speed=player.inWater?3.0:(input.sprint?6.5:4.3);
   if(player.speedT>0)speed*=1.6; // 💨 速度药水
   if(player.inWater&&player.speedT>0)speed=Math.min(speed,5.5);
@@ -126,6 +127,10 @@ function fullInfinityArmor(){ // 全套无尽贪婪盔甲
   for(const a of inv.armor)if(!a||!ITEMS[a.id]||ITEMS[a.id].mat!=='infinity')return false;
   return true;
 }
+function fullMatArmor(mat){ // 🛡️ 穿了一整套某个材料的盔甲？（红石/煤炭/绿宝石/铜/青金石/黑曜石/基岩/泰坦）
+  for(const a of inv.armor)if(!a||!ITEMS[a.id]||ITEMS[a.id].mat!==mat)return false;
+  return true;
+}
 function fullGodArmor(){ // 全套创世盔甲（HIM模组）：几乎不掉血！
   for(const a of inv.armor)if(!a||!ITEMS[a.id]||ITEMS[a.id].mat!=='god')return false;
   return true;
@@ -140,7 +145,18 @@ function damagePlayer(dmg,reason){
   if(gameMode==='parkour')return; // 跑酷：不掉血（掉落由 updateParkour 回起点）
   if(gameMode==='creative')return; // 创造模式不掉血
   if(gameMode==='shooter'&&SHOOTER.spawnProtectT>0){showToast('🛡 出生保护中，免疫伤害！');return;} // 出生保护免伤
-  if(fullGodArmor()){ // 创世神甲：比无尽贪婪还硬！
+  if(player.goldT>0){dmg*=0.5;if(Math.random()<0.3)spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(255,220,90)');} // 🍎 金光护盾：伤害减半！
+  if(player.goldT>0)player.goldT-=0; // 计时在 physicsStep 里走
+  if(fullMatArmor('titan')){ // 💜 全套泰坦甲：最最最强！凋零斯拉打你也像挠痒痒
+    dmg=Math.max(dmg*0.01,0.01);
+    if(Math.random()<0.5)spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(192,74,232)');
+  }else if(fullMatArmor('bedrock')){ // ⬛ 全套基岩甲：几乎完全打不动！泰坦踩你也只掉一点点
+    dmg=Math.max(dmg*0.02,0.02);
+    if(Math.random()<0.4)spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(120,120,120)');
+  }else if(fullMatArmor('obsidian')){ // ⚫ 全套黑曜石甲：保护力超强！
+    dmg=Math.max(dmg*0.08,0.05);
+    if(Math.random()<0.35)spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(90,60,140)');
+  }else if(fullGodArmor()){ // 创世神甲：比无尽贪婪还硬！
     dmg=Math.max(dmg*0.05,0.05);
     if(Math.random()<0.4)spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(255,232,160)');
   }else if(fullInfinityArmor()){ // 无尽贪婪甲：打十下才掉一滴血
@@ -527,7 +543,10 @@ function updateHandView(dt){
 
 function breakTimeFor(b,held){
   const def=BLOCKS[b];
-  if(!isFinite(def.hard))return Infinity;
+  if(!isFinite(def.hard)){
+    if(b===B_BEDROCK&&modsOn.titan&&held===I.obsidian_pickaxe)return 25; // 🗿 泰坦模组：黑曜石镐能慢慢挖动基岩！
+    return Infinity;
+  }return Infinity;
   const it=held?ITEMS[held]:null;
   if(it&&it.type==='tool'&&def.tool&&it.toolType===def.tool&&it.tier>=def.minTier){
     const st=inv.hot[player.sel];
@@ -596,6 +615,29 @@ function breakBlock(x,y,z,b){
     if(!modsOn.lucky){showToast('🔒 要先在开始界面打开幸运方块模组哦！');}
     else luckyEvent(b,x,y,z);
   }
+  // ☝️ 单格方块生存：挖神奇方块→长新方块+随机奖励
+  if(modsOn.oneblock&&oneBlockPos&&x===oneBlockPos.x&&y===oneBlockPos.y&&z===oneBlockPos.z){
+    oneBlockCount++;
+    setBlock(x,y,z,oneBlockRandomBlock());
+    spawnDrop(x+0.5,y+1.2,z+0.5,oneBlockBonus(),1);
+    if(oneBlockCount===10)showToast('☝️ 挖了 10 次！方块越来越好啦～');
+    if(oneBlockCount===25)showToast('☝️ 25 次！石头时代来喽！');
+    if(oneBlockCount===50)showToast('☝️ 50 次！铁器时代！');
+    if(oneBlockCount===80)showToast('☝️ 80 次！快到钻石啦！');
+    if(oneBlockCount===150)showToast('🏆 150 次！你是单格方块大师！');
+    if(Math.random()<0.06)spawnMob(['pig','sheep','chicken','cow'][(Math.random()*4)|0],x+1,z);
+    onWorldChanged();
+    return; // 不走正常掉落
+  }
+  // ⛏️ 连锁采集：挖一个，连在一起的一样的全掉出来！
+  if(modsOn.vein&&!chainVein&&VEIN_BLOCKS.has(b)){
+    chainVein=true;
+    const n=veinMine(x,y,z,b);
+    chainVein=false;
+    if(n>0)showToast('⛏️✨ 连锁采集！一下子挖掉 '+(n+1)+' 个「'+BLOCKS[b].name+'」！');
+  }
+  // 🗿 泰坦模组：黑曜石镐能挖基岩！
+  if(b===B_BEDROCK&&modsOn.titan&&held===I.obsidian_pickaxe){spawnDrop(x+0.5,y+0.5,z+0.5,B_BEDROCK,1);}
   // 💜 无尽贪婪镐子：一镐下去 3×3×3 一大片全碎！
   if(held===I.infinity_pickaxe&&!chainMining){
     chainMining=true;
@@ -684,6 +726,14 @@ function eatFood(){
   const f=fid&&ITEMS[fid]?ITEMS[fid].food:0;
   if(!f)return;
   const emoji={bread:'🍞',carrot:'🥕',potato:'🥔'}[ITEMS[fid].key]||'🍞';
+  if(fid===I.golden_apple){ // 🍎 金苹果：回满血 + 30秒金光护盾（受伤减半）！
+    player.hp=player.maxHp;updateHearts();
+    player.goldT=30;
+    spawnBlockParticles(player.pos.x,player.pos.y+1,player.pos.z,'rgb(255,220,90)');
+    showToast('🍎✨ 金苹果！生命全满！30秒金光护盾，怪物打你只掉一半血！');
+    if(gameMode!=='creative')consumeHeld(1);
+    return;
+  }
   if(f>0){
     if(player.hp<player.maxHp){
       player.hp=Math.min(player.maxHp,player.hp+f);updateHearts();
@@ -753,6 +803,134 @@ function interactOrPlace(){
   if(mh&&mh.mob.type==='hghast'&&mh.d<4.2){mountGhast(mh.mob);return;}
   // 💚 村民交易：点村民打开交易面板
   if(mh&&mh.mob.type==='villager'&&mh.d<4.2){openTrade();return;}
+  const t0=raycastVoxel(5.2);
+  if(t0){
+    // 💥 炸弹们：点一下就炸！
+    if(t0.block===B_TNT){setBlock(t0.x,t0.y,t0.z,0);explode(t0.x+0.5,t0.y+0.5,t0.z+0.5,3,8);showToast('💥 砰！');return;}
+    if(t0.block===B_SUPER_TNT){setBlock(t0.x,t0.y,t0.z,0);explode(t0.x+0.5,t0.y+0.5,t0.z+0.5,5,16);showToast('💥💥 超级大爆炸！');return;}
+    // 🧨 更多TNT模组：16种新TNT！
+    if(t0.block>=B_TNT_BIG&&t0.block<=B_TNT_TP){
+      if(!modsOn.moretnt){showToast('🔒 要先打开更多TNT模组哦！');return;}
+      const cx=t0.x+0.5,cy=t0.y+0.5,cz=t0.z+0.5;
+      const tb=t0.block;
+      setBlock(t0.x,t0.y,t0.z,0);
+      if(tb===B_TNT_BIG){ // 💥💥💥 超巨大爆炸！
+        explode(cx,cy,cz,8,30);showToast('💥💥💥 超超超巨大爆炸！！！');
+      }else if(tb===B_TNT_FIRE){ // 🔥 火焰TNT：炸完还着火！
+        explode(cx,cy,cz,3,10);
+        for(let dx=-3;dx<=3;dx++)for(let dz=-3;dz<=3;dz++)if(dx*dx+dz*dz<=9){
+          const fx2=t0.x+dx,fz2=t0.z+dz,fy=surfaceY(fx2,fz2)+1;igniteFire(fx2,fy,fz2);
+        }
+        showToast('🔥💥 火焰爆炸！到处都着火啦！');
+      }else if(tb===B_TNT_ICE){ // 🧊 冰冻TNT：把周围冻成冰屋！
+        explode(cx,cy,cz,2,6);
+        for(let dx=-3;dx<=3;dx++)for(let dy=-3;dy<=3;dy++)for(let dz=-3;dz<=3;dz++){
+          const d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+          if(d>2.6&&d<=3.6){const bx=t0.x+dx,by=t0.y+dy,bz=t0.z+dz;if(getBlock(bx,by,bz)===B_AIR)setBlock(bx,by,bz,B_GLASS);}
+        }
+        for(const m of mobs){if(!m.dead&&m.pos.distanceTo(new THREE.Vector3(cx,cy,cz))<10)m.iceT=5;}
+        showToast('🧊💥 冰冻爆炸！怪物都被冻住啦！');
+      }else if(tb===B_TNT_LIGHTNING){ // ⚡ 雷电TNT：召唤6道闪电！
+        for(let i=0;i<6;i++)luckyLightning(t0.x+((Math.random()*11)|0)-5,t0.z+((Math.random()*11)|0)-5);
+        explode(cx,cy,cz,2,6);showToast('⚡💥 雷电爆炸！天降神雷！');
+      }else if(tb===B_TNT_MOB){ // 👹 怪物TNT
+        for(let i=0;i<8;i++)spawnMob(['zombie','skeleton','spider','creeper'][(Math.random()*4)|0],t0.x+((Math.random()*9)|0)-4,t0.z+((Math.random()*9)|0)-4);
+        showToast('👹💥 哇！蹦出了一大群怪物！');
+      }else if(tb===B_TNT_ANIMAL){ // 🐷 动物TNT
+        for(let i=0;i<8;i++)spawnMob(['pig','sheep','chicken','cow'][(Math.random()*4)|0],t0.x+((Math.random()*9)|0)-4,t0.z+((Math.random()*9)|0)-4);
+        showToast('🐷💥 哇！蹦出了一大群小动物！');
+      }else if(tb===B_TNT_DIAMOND){ // 💎 钻石TNT：炸出钻石矿！
+        explode(cx,cy,cz,3,8);
+        let placed=0;
+        for(let i=0;i<40&&placed<12;i++){
+          const bx=t0.x+((Math.random()*9)|0)-4,by=t0.y+((Math.random()*9)|0)-4,bz=t0.z+((Math.random()*9)|0)-4;
+          if(getBlock(bx,by,bz)===B_AIR){setBlock(bx,by,bz,B_DIAMOND_ORE);placed++;}
+        }
+        giveItemToInv(I.diamond,2);
+        showToast('💎💥 钻石爆炸！炸出了钻石矿！');
+      }else if(tb===B_TNT_HOUSE){ // 🏠 房子TNT
+        buildLuckyHouse(t0.x,t0.y,t0.z);
+        showToast('🏠💥 嘭！变出了一座小木屋！');
+      }else if(tb===B_TNT_RAINBOW){ // 🌈 彩虹TNT：天上掉彩虹方块雨！
+        explode(cx,cy,cz,2,4);
+        const RB=[B_GOLD_BLOCK,B_DIAMOND_BLOCK,B_EMERALD_BLOCK,B_REDSTONE_BLOCK,B_GLOWSTONE,B_INFINITY_BLOCK];
+        let rp=0;
+        for(let i=0;i<60&&rp<24;i++){
+          const bx=t0.x+((Math.random()*13)|0)-6,bz=t0.z+((Math.random()*13)|0)-6,by=surfaceY(bx,bz)+1;
+          if(getBlock(bx,by,bz)===B_AIR){setBlock(bx,by,bz,RB[i%6]);rp++;spawnBlockParticles(bx+0.5,by+0.5,bz+0.5,'rgb(255,120,220)');}
+        }
+        showToast('🌈💥 哇！下起彩虹方块雨啦！');
+      }else if(tb===B_TNT_FLOOD){ // 🌊 洪水TNT
+        for(let dx=-4;dx<=4;dx++)for(let dz=-4;dz<=4;dz++)if(dx*dx+dz*dz<=16){
+          const bx=t0.x+dx,bz=t0.z+dz,by=surfaceY(bx,bz)+1;
+          if(getBlock(bx,by,bz)===B_AIR)setBlock(bx,by,bz,B_WATER);
+        }
+        showToast('🌊💥 哗啦啦！发大水啦，快游泳！');
+      }else if(tb===B_TNT_LAVA){ // 🌋 岩浆TNT
+        explode(cx,cy,cz,2,6);
+        for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)if(dx*dx+dz*dz<=5){
+          const bx=t0.x+dx,bz=t0.z+dz,by=surfaceY(bx,bz)+1;
+          if(getBlock(bx,by,bz)===B_AIR)setBlock(bx,by,bz,B_LAVA);
+        }
+        showToast('🌋💥 火山爆发！小心滚烫的岩浆！');
+      }else if(tb===B_TNT_HOLE){ // 🕳️ 黑洞TNT：吸出一个超级大深坑！
+        explode(cx,cy,cz,10,20);
+        for(let dy=0;dy<20;dy++)explode(cx,cy-dy*1.2,cz,3,0);
+        showToast('🕳️💥 黑洞！地面被吸出一个超级大深坑！');
+      }else if(tb===B_TNT_FIREWORK){ // 🎆 烟花TNT
+        const FC=['rgb(255,80,80)','rgb(255,200,60)','rgb(120,255,120)','rgb(120,180,255)','rgb(230,130,255)'];
+        for(let i=0;i<30;i++)for(let j=0;j<8;j++)spawnBlockParticles(cx+(Math.random()*30-15),cy+8+Math.random()*18,cz+(Math.random()*30-15),FC[i%5]);
+        thunderSound(1);
+        showToast('🎆💥 砰砰啪！满天都是漂亮的烟花！');
+      }else if(tb===B_TNT_FOOD){ // 🍗 美食TNT
+        explode(cx,cy,cz,2,4);
+        giveItemToInv(I.bread,5);giveItemToInv(I.potato,5);giveItemToInv(I.carrot,5);giveItemToInv(I.wheat,5);
+        for(let i=0;i<20;i++)spawnBlockParticles(cx+(Math.random()*6-3),cy+Math.random()*3,cz+(Math.random()*6-3),'rgb(255,220,120)');
+        showToast('🍗💥 哇！掉了好多面包、土豆和胡萝卜！');
+      }else if(tb===B_TNT_CHEST){ // 🎁 宝箱TNT：变出装满宝贝的宝箱！
+        const sy2=surfaceY(t0.x,t0.z)+1;
+        setBlock(t0.x,sy2,t0.z,B_CHEST);
+        const ck3=t0.x+','+sy2+','+t0.z;
+        const slots=new Array(27).fill(null);
+        const loot=[[I.diamond,3],[I.gold_ingot,5],[I.iron_ingot,8],[I.emerald,4],[I.redstone,10],[I.bread,5],[I.slimeball,6],[I.ender_pearl,2]];
+        loot.forEach((l,i)=>{slots[i*3]={id:l[0],count:l[1]};});
+        chestStates[ck3]={slots};
+        for(let i=0;i<16;i++)spawnBlockParticles(t0.x+0.5,sy2+0.5+Math.random(),t0.z+0.5,'rgb(255,215,0)');
+        showToast('🎁💥 嘭！变出一个装满宝贝的宝箱！');
+      }else if(tb===B_TNT_TP){ // 🌀 传送TNT：咻！把你传送到随机地方！
+        for(let i=0;i<24;i++)spawnBlockParticles(player.pos.x,player.pos.y+Math.random()*2,player.pos.z,'rgb(120,255,230)');
+        const nx=Math.floor(player.pos.x+(Math.random()*400-200)),nz=Math.floor(player.pos.z+(Math.random()*400-200));
+        const ny=surfaceY(nx,nz)+2;
+        player.pos.set(nx+0.5,ny,nz+0.5);player.vel.set(0,0,0);player.peakY=ny;
+        for(let i=0;i<24;i++)spawnBlockParticles(nx+0.5,ny+Math.random()*2,nz+0.5,'rgb(120,255,230)');
+        showToast('🌀💥 咻——！你被传送到了一个新地方！');
+      }
+      onWorldChanged();
+      return;
+    }
+    // 🗿 泰坦刷怪蛋：放出超级大泰坦！
+    const TITAN_EGGS={[I.titan_zombie_egg]:'titan_zombie',[I.titan_skeleton_egg]:'titan_skeleton',[I.titan_creeper_egg]:'titan_creeper',[I.titan_spider_egg]:'titan_spider',[I.titan_golem_egg]:'titan_golem',[I.titan_warden_egg]:'titan_warden',[I.witherzilla_egg]:'witherzilla'};
+    const titanEggType=TITAN_EGGS[heldItemId()];
+    if(titanEggType){
+      if(!modsOn.titan){showToast('🔒 要先在开始界面打开泰坦模组哦！');return;}
+      spawnMob(titanEggType,t0.x,t0.z,t0.y+1);
+      showToast('🌍 轰隆隆！'+(TITAN_NAMES[titanEggType]||'泰坦')+'出现了！！');
+      return;
+    }
+    // 🔥 打火石：点矿石门框点燃维度传送门；点别的地方就着火！
+    if(heldItemId()===I.flint_steel){
+      const frameDim={[B_IRON_BLOCK]:'iron',[B_GOLD_BLOCK]:'gold',[B_DIAMOND_BLOCK]:'diamond',[B_NETHERITE_BLOCK]:'netherite',[B_REDSTONE_BLOCK]:'redstone',[B_EMERALD_BLOCK]:'emerald',[B_INFINITY_BLOCK]:'infinity'};
+      const dim=frameDim[t0.block];
+      if(dim){
+        if(!modsOn.oredim){showToast('🔒 要先在开始界面打开🌀矿石维度模组哦！');return;}
+        if(!tryLightOrePortal(t0.x,t0.y,t0.z,t0.block,dim))showToast('💡 小提示：门框中间要留一个洞，洞的四周（除了最下面贴地的一排）都要是同一种方块哦！');
+        return;
+      }
+      // 点普通方块：上面着火啦！
+      if(igniteFire(t0.x,t0.y+1,t0.z))showToast('🔥 点着啦！小心火会烧到旁边的木头哦～');
+      return;
+    }
+  }
   const t=raycastVoxel(5.2);
   if(!t)return;
   if(t.block===B_TABLE){openTable();return;}
@@ -863,6 +1041,7 @@ function interactOrPlace(){
     setBlock(hx,ty,hz,B_BED_HEAD);
   }
   setBlock(tx,ty,tz,it.blockId);
+  if(it.blockId===B_COPIER)setTimeout(()=>tryCopyFill(tx,ty,tz),50); // 📋 复制方块：放下后尝试填充
   if(it.blockId===B_DOOR)setBlock(tx,ty+1,tz,B_DOOR);
   if(it.blockId===B_FURNACE||it.blockId===B_PISTON||it.blockId===B_STICKY)facings[tx+','+ty+','+tz]=playerFacingIdx();
   if(gameMode!=='creative')consumeHeld(1); // 创造模式放置不消耗

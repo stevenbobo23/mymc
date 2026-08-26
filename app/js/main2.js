@@ -155,9 +155,11 @@ function restoreShooterSave(save){
   updateGunHud();
 }
 // 通用"载入存档进入游戏"（开始界面继续 / 存档目录进入 共用）
+let pendingSaveWasLoaded=false; // 本局是否从存档进来（oneblock 用）
 function enterSaveSlot(id){
   const sd=loadSave(id);
   if(!sd)return false;
+  pendingSaveWasLoaded=true;
   setActiveSlot(id);
   if(sd.gameMode==='shooter')restoreShooterSave(sd);
   else{
@@ -187,6 +189,9 @@ function loop(t){
   portalTick(dt);
   dimHazardTick(dt);
   cropTick(dt);
+  fireTick(dt); // 🔥 火焰蔓延+烧伤
+  torchLightTick(dt); // 🔥 火把照明
+  oneBlockTick(); // ☝️ 单格方块生存：掉落拉回
   waterTick(dt); // 水流动（挖开水边/倒水后蔓延）
   if(typeof villageTickT!=='undefined'){villageTickT+=dt;if(villageTickT>0.5){villageTickT=0;villageTick();}} // 走近村庄时刷村民
   updateSwordRain(dt); // 剑雨（无尽贪婪剑特效）
@@ -296,10 +301,7 @@ function loop(t){
     updateDayNight(dt);
     swordSparkleTick(dt); // 传说武器闪光
     updateWeather(dt); // 下雨/打雷/闪电
-    ancientCityTick(); // 远古城市：坚守者巡逻
-    desertTempleTick(); // 沙漠神殿：压力板陷阱
-    mineshaftTick(); // 矿洞：矿车轨道巡逻
-    monumentTick(); // 海底神殿：守卫者刷新
+    if(!modsOn.oneblock){ancientCityTick();desertTempleTick();mineshaftTick();monumentTick();} // ☝️ 单格方块生存：不生成结构（空世界）
   }
   processDirty(6);
   camera.position.set(player.pos.x,player.pos.y+PEYE,player.pos.z);
@@ -334,6 +336,23 @@ function startGame(){
   if(isTouch)setTimeout(()=>{if(gameState==='playing')showToast('合成木板：背包→点原木→点合成格→点成品取出');},2800);
   if(location.search.indexOf('book=1')>=0)setTimeout(()=>{if(gameState==='playing')openBook();},400);
   if(location.search.indexOf('inv=1')>=0)setTimeout(()=>{if(gameState==='playing')openInventory();},400);
+  // ☝️ 单格方块生存：新世界时生成神奇方块（从存档进来则靠 blockDiff 保留）
+  if(modsOn.oneblock&&!pendingSaveWasLoaded){
+    const sx=Math.round(spawnPoint.x),sz=Math.round(spawnPoint.z);
+    if(!blockDiff[sx+',54,'+sz]&&getBlock(sx,54,sz)===B_AIR)startOneBlock();
+    else if(!oneBlockPos){ // 存档恢复：从 blockDiff 找神奇方块（最高处的实心方块）
+      let best=null;
+      for(const k in blockDiff){
+        const p=k.split(',');
+        if(p[2]!==sz.toString()&&Math.abs(+p[0]-sx)>8)continue;
+        const b=blockDiff[k];
+        if(BLOCKS[b]&&BLOCKS[b].solid&&(!best||+p[1]>=best.y))best={x:+p[0],y:+p[1],z:+p[2]};
+      }
+      if(best)oneBlockPos=best;
+    }
+  }
+  // 🌍 逼真光影模组：进游戏恢复
+  if(modsOn.real)applyRealMod(true);
   if(location.search.indexOf('night=1')>=0)dayTime=0.72;
 }
 function findSpawn(){
@@ -399,6 +418,7 @@ function switchDim(target){
   else player.pos.copy(dimSpawnPos(target));
   player.vel.set(0,0,0);player.peakY=player.pos.y;
   spawnPoint.set(player.pos.x,player.pos.y,player.pos.z);
+  if(ORE_DIMS[target])buildOreDimHome(target); // 🌀 第一次到矿石维度：造回家传送门+发光地板
   showToast('✨ '+DIM_NAMES[target]+' 到了！');
   updateTasks();saveGame();
   if(target==='end'&&(NET.isHost||!NET.roomId))setTimeout(()=>{if(curDim==='end')spawnDragon();},800);
@@ -429,10 +449,16 @@ function portalTick(dt){
   const fx=Math.floor(player.pos.x),fy=Math.floor(player.pos.y),fz=Math.floor(player.pos.z);
   const here=getBlock(fx,fy,fz),head=getBlock(fx,fy+1,fz);
   const inPortal=here===B_PORTAL||head===B_PORTAL,inEnd=here===B_ENDPORTAL||head===B_ENDPORTAL;
-  if(!inPortal&&!inEnd){portalT=0;return;}
+  const inOre=here===B_OREPORTAL||head===B_OREPORTAL; // 🌀 矿石维度传送门
+  if(!inPortal&&!inEnd&&!inOre){portalT=0;return;}
   portalT+=dt;
   if(portalT<1.2)return;
   portalT=0;
+  if(inOre){
+    const key=orePortalKey(fx,fy,fz),key2=orePortalKey(fx,fy+1,fz);
+    const dim=orePortalDim[key]||orePortalDim[key2];
+    if(dim){switchDim(curDim===dim?'overworld':dim);return;} // 来回切换
+  }
   if(inPortal)switchDim(curDim==='nether'?'overworld':'nether');
   else switchDim(curDim==='end'?'overworld':'end');
 }
@@ -1667,6 +1693,12 @@ function initNetUI(){
       showToast(modsOn[k]?'🧩 模组打开啦！进游戏就能玩到':'🧩 模组关掉了');
     };
     row.addEventListener('click',toggle);
+    // 🌍 逼真光影：开关即时生效
+    if(row.dataset.mod==='real'){
+      const origToggle=toggle;
+      // toggle 已绑，再补一个 applyRealMod 调用（事件顺序无妨，读最新 modsOn）
+      row.addEventListener('click',()=>{if(typeof applyRealMod==='function'&&renderer)applyRealMod(modsOn.real);});
+    }
   });
   $('mpFab').addEventListener('click',toggleMpPanel);
   $('mpHostBtn').addEventListener('click',()=>{
