@@ -565,6 +565,7 @@ function makeNoise(x,z){
 }
 function ancientCityTick(){
   if(curDim!=='overworld'||cityBuilt)return;
+  if(gameMode!=='survival'&&gameMode!=='creative')return; // 枪战/空岛/跑酷：不建远古城市（防 blockDiff 污染竞技场）
   const cp=getCityPos();
   if(Math.hypot(player.pos.x-cp.x,player.pos.z-cp.z)<110){
     cityBuilt=true;
@@ -667,6 +668,7 @@ function buildDesertTemple(){
   setBlock(bx+3,ry+2,bz,B_GLOWSTONE);setBlock(bx-3,ry+2,bz,B_GLOWSTONE); // 房间的小灯
 }
 function desertTempleTick(){
+  if(gameMode!=="survival"&&gameMode!=="creative")return; // 枪战/空岛/跑酷：结构不生成
   if(curDim!=='overworld')return;
   if(!templeBuilt){
     const bp=getDesertTemplePos();
@@ -796,6 +798,7 @@ function buildMineshaft(bx,bz){
   setBlock(bx,MY,bz,B_WATER);
 }
 function mineshaftTick(){
+  if(gameMode!=="survival"&&gameMode!=="creative")return; // 枪战/空岛/跑酷：结构不生成
   if(curDim!=='overworld')return;
   for(let i=0;i<MINE_COUNT;i++){
     if(mineBuiltSet[i])continue;
@@ -953,6 +956,7 @@ function buildOceanMonument(){
   }
 }
 function monumentTick(){
+  if(gameMode!=="survival"&&gameMode!=="creative")return; // 枪战/空岛/跑酷：结构不生成
   if(curDim!=='overworld')return;
   const bp=getMonumentPos();
   if(!monumentBuilt){

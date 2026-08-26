@@ -488,6 +488,7 @@ function setupWorld(seed,save){
     curDim='overworld';dragonKilled=false;$('bossbar').style.display='none';
     for(const dn of ['overworld','nether','end']){DIMS[dn].diff={};DIMS[dn].fac={};DIMS[dn].furn={};DIMS[dn].chest={};DIMS[dn].pos=null;}
   }
+  cityBuilt=false; // 结构 tick 状态重置（新世界允许重新生成远古城市）
   for(const k in chunks)delete chunks[k];
   clearWorldMeshes();
   for(const k in blockDiff)delete blockDiff[k];
