@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:,">
 <title>方块世界 - Minecraft风格网页游戏</title>
-    <link rel="stylesheet" href="css/style2.css?v=20260826a">
+    <link rel="stylesheet" href="css/style2.css?v=20260827b">
 
 </head>
 <body>
@@ -324,20 +324,23 @@
   </div>
   <h1 class="mc-title"><span>方块世界</span></h1>
   <div class="sub">— Minecraft 风格网页沙盒 —</div>
-  <div id="modeRow" style="display:flex;gap:10px;margin:4px 0 12px;z-index:1">
-    <button class="mcbtn modeBtn" id="modeSurvival">⚒ 生存</button>
-    <button class="mcbtn modeBtn" id="modeCreative">🧱 创造</button>
-  </div>
-  <button id="startBtn" class="mcbtn mcbtn-big">点击开始</button>
-  <button id="newWorldBtn" class="mcbtn mcbtn-orange hidden">🌍 创建新世界</button>
-  <button id="saveDirBtn" class="mcbtn">💾 存档目录</button>
-  <button id="skyBlockBtn" class="mcbtn mcbtn-teal">🏝️ 空岛模式</button>
-  <button id="parkourBtn" class="mcbtn mcbtn-orange">🏃 跑酷模式</button>
-  <button id="shooterBtn" class="mcbtn mcbtn-red">🔫 枪战模式</button>
-  <button id="modBtn" class="mcbtn" style="background:linear-gradient(#5a6ae8,#3a3ab0)">🧩 模组选择（HIM · 凋零风暴 · 幸运方块）</button>
-  <button id="mpBtn" class="mcbtn mcbtn-green">🌐 联机大厅</button>
-  <button id="helpBtn" class="mcbtn mcbtn-sm mcbtn-gray" style="min-width:150px">📖 操作帮助</button>
-  <div id="help" class="help hidden">
+  <div id="menuPanel">
+    <div id="modeRow" style="display:flex;gap:10px;margin:0 0 2px;z-index:1">
+      <button class="mcbtn modeBtn" id="modeSurvival">⚒ 生存</button>
+      <button class="mcbtn modeBtn" id="modeCreative">🧱 创造</button>
+    </div>
+    <button id="startBtn" class="mcbtn mcbtn-big">点击开始</button>
+    <button id="newWorldBtn" class="mcbtn mcbtn-orange hidden">🌍 创建新世界</button>
+    <div id="extraModes">
+      <button id="saveDirBtn" class="mcbtn">💾 存档目录</button>
+      <button id="skyBlockBtn" class="mcbtn mcbtn-teal">🏝️ 空岛模式</button>
+      <button id="parkourBtn" class="mcbtn mcbtn-orange">🏃 跑酷模式</button>
+      <button id="shooterBtn" class="mcbtn mcbtn-red">🔫 枪战模式</button>
+      <button id="modBtn" class="mcbtn mcbtn-purple">🧩 模组选择（HIM · 凋零风暴 · 幸运方块）</button>
+      <button id="mpBtn" class="mcbtn mcbtn-green">🌐 联机大厅</button>
+    </div>
+    <button id="helpBtn" class="mcbtn mcbtn-sm mcbtn-gray" style="min-width:150px;margin-top:10px">📖 操作帮助</button>
+    <div id="help" class="help hidden">
     <div class="cols">
       <div>
         <b>💻 桌面操作</b><br>
@@ -355,6 +358,7 @@
       </div>
     </div>
     <div style="margin-top:8px;color:#9f9">目标：砍树→合成→挖矿→烧铁→做护甲→挖钻石→下界合金！跟着左上角任务走。</div>
+    </div>
   </div>
 </div>
 <!-- 场景选择 / 存档目录面板：移到 body 直接子级（避免被 #start 的 z-index 限制，盖不过联机大厅 mpPanel） -->
@@ -371,7 +375,7 @@
 <div id="savePanel" class="mc-overlay hidden">
   <div class="mc-dialog">
     <h2 id="savePanelTitle" style="color:#8ad4ff;font-size:22px;margin:0 0 4px;text-shadow:1px 1px 0 #000">💾 存档目录</h2>
-    <div class="hint" style="color:#aaa;font-size:12px;margin-bottom:12px">每个存档独立保存世界/背包/进度。进入游戏后点左下角 💾 保存，自动存档每 10 秒一次。</div>
+    <div class="hint" style="color:#aaa;font-size:12px;margin-bottom:12px">每个存档独立保存世界/背包/进度。进入游戏后点左下角 💾 保存，自动存档每 20 秒一次，退出页面也会自动保存。</div>
     <div id="saveList" style="display:flex;flex-direction:column;gap:8px;min-height:60px"></div>
     <div id="newSaveWrap" style="display:flex;gap:8px;margin-top:14px">
       <input id="newSaveName" maxlength="16" placeholder="新存档名字（留空自动命名）" style="flex:1;padding:8px 12px;font-size:14px;background:#222;color:#fff;border:1px solid #666;border-radius:6px">
@@ -394,13 +398,13 @@
   <button id="parkourCancelBtn" class="mcbtn mcbtn-gray" style="margin-top:16px;font-size:16px;padding:9px 30px">取消</button>
 </div>
 
-    <script src="js/error.js?v=20260826a"></script>
-    <script src="js/three.min.js?v=20260826a"></script>
-    <script src="js/tools2.js?v=20260826a"></script>
-    <script src="js/world2.js?v=20260826a"></script>
-    <script src="js/player2.js?v=20260826a"></script>
-    <script src="js/mobs2.js?v=20260826a"></script>
-    <script src="js/ui2.js?v=20260826a"></script>
-    <script src="js/main2.js?v=20260826a"></script>
+    <script src="js/error.js?v=20260827b"></script>
+    <script src="js/three.min.js?v=20260827b"></script>
+    <script src="js/tools2.js?v=20260827b"></script>
+    <script src="js/world2.js?v=20260827b"></script>
+    <script src="js/player2.js?v=20260827b"></script>
+    <script src="js/mobs2.js?v=20260827b"></script>
+    <script src="js/ui2.js?v=20260827b"></script>
+    <script src="js/main2.js?v=20260827b"></script>
 </body>
 </html>

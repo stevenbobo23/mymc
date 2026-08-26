@@ -641,8 +641,10 @@ function buildPanels(){
   $('skinNext2').addEventListener('click',()=>{skinIdx=(skinIdx+1)%SKINS.length;updSkin2();drawPaperDoll();});
   updSkin2();
   document.querySelectorAll('.closeX').forEach(b=>{
-    b.addEventListener('click',()=>closeAllPanels());
-    b.addEventListener('touchstart',e=>{e.preventDefault();closeAllPanels();},{passive:false});
+    // 按 data-close 精确关闭对应面板；没写的退回全关
+    const act=()=>{const t=b.getAttribute('data-close');if(t)closeOnePanel(t);else closeAllPanels();};
+    b.addEventListener('click',act);
+    b.addEventListener('touchstart',e=>{e.preventDefault();act();},{passive:false});
   });
 }
 function fillGrid(el,area,n){
@@ -829,16 +831,32 @@ function buildBook(){
     list.appendChild(row);
   }
 }
+function relockIfIdle(){ // 关面板收尾：无面板时重新锁定指针（桌面端）
+  if(gameState==='playing'&&!isTouch&&!player.dead){
+    setTimeout(()=>{
+      if(!anyPanelOpen()&&gameState==='playing'&&!player.dead)lockPointer();
+    },60);
+  }
+}
+function clearPanelCtx(id){
+  if(id==='furnacePanel')curFurn=null;
+  else if(id==='chestPanel')curChest=null;
+  else if(id==='enchPanel')curEnch=null;
+}
+function closeOnePanel(id){ // 精确关闭单个面板（closeX 的 data-close）
+  const el=document.getElementById(id);
+  if(!el||el.classList.contains('hidden'))return;
+  el.classList.add('hidden');
+  clearPanelCtx(id);
+  if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
+  relockIfIdle();
+}
 function closeAllPanels(){
   const was=anyPanelOpen();
   if(document.activeElement&&document.activeElement.blur)document.activeElement.blur(); // 收起键盘焦点，T键下次还能开
   hide('invPanel');hide('tablePanel');hide('furnacePanel');hide('bookPanel');hide('mpPanel');hide('cmdPanel');hide('chestPanel');hide('enchPanel');hide('brewPanel');hide('tradePanel');hide('modPanel');
   curFurn=null;curChest=null;curEnch=null;
-  if(was&&gameState==='playing'&&!isTouch&&!player.dead){
-    setTimeout(()=>{
-      if(!anyPanelOpen()&&gameState==='playing'&&!player.dead)lockPointer();
-    },60);
-  }
+  if(was)relockIfIdle();
 }
 
 // ---------------- 🛒 村民交易（绿宝石经济） ----------------

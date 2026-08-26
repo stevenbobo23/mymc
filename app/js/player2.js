@@ -172,6 +172,7 @@ function damagePlayer(dmg,reason){
   updateHearts();
   if(player.hp<=0){
     player.hp=0;player.dead=true;
+    closeAllPanels(); // 死亡瞬间收起所有面板，避免挡住重生按钮
     spawnBlood(player.pos.x,player.pos.y+1,player.pos.z); // 击杀瞬间大血雾
     spawnBlood(player.pos.x,player.pos.y+1.4,player.pos.z);
     if(gameMode==='shooter'){
@@ -209,7 +210,7 @@ let pointerLocked=false;
 function $(id){return document.getElementById(id);}
 function show(id){$(id).classList.remove('hidden');}
 function hide(id){$(id).classList.add('hidden');}
-function anyPanelOpen(){return !$('invPanel').classList.contains('hidden')||!$('tablePanel').classList.contains('hidden')||!$('furnacePanel').classList.contains('hidden')||!$('bookPanel').classList.contains('hidden')||!$('mpPanel').classList.contains('hidden')||!$('cmdPanel').classList.contains('hidden')||!$('chestPanel').classList.contains('hidden')||!$('enchPanel').classList.contains('hidden')||!$('tradePanel').classList.contains('hidden')||!$('brewPanel').classList.contains('hidden');}
+function anyPanelOpen(){return !$('invPanel').classList.contains('hidden')||!$('tablePanel').classList.contains('hidden')||!$('furnacePanel').classList.contains('hidden')||!$('bookPanel').classList.contains('hidden')||!$('mpPanel').classList.contains('hidden')||!$('cmdPanel').classList.contains('hidden')||!$('chestPanel').classList.contains('hidden')||!$('enchPanel').classList.contains('hidden')||!$('tradePanel').classList.contains('hidden')||!$('brewPanel').classList.contains('hidden')||!$('modPanel').classList.contains('hidden');}
 function inputEnabled(){return gameState==='playing'&&!player.dead&&!anyPanelOpen();}
 function lockPointer(){if(isTouch)return;const c=renderer.domElement;if(c.requestPointerLock)c.requestPointerLock();}
 function unlockPointer(){if(document.exitPointerLock&&document.pointerLockElement)document.exitPointerLock();}
@@ -237,8 +238,8 @@ function initControls(){
       e.preventDefault();
     }
     if(e.code==='KeyT'){
-      // T 键：唤起/隐藏左侧任务面板
-      if(anyPanelOpen())closeAllPanels();
+      // T 键：唤起/隐藏左侧任务面板；有面板时只负责关面板
+      if(anyPanelOpen()){closeAllPanels();e.preventDefault();return;}
       toggleTasks();
       e.preventDefault();
     }
@@ -282,6 +283,7 @@ function initControls(){
   document.addEventListener('pointerlockchange',()=>{
     pointerLocked=document.pointerLockElement===renderer.domElement;
     if(!pointerLocked&&gameState==='playing'&&!anyPanelOpen()&&!player.dead&&!isTouch){
+      closeAllPanels(); // 防御：清单外的浮层若开着也别与暂停菜单叠层
       show('pause');
       const db=$('disconnectBtn');
       if(db)db.classList.toggle('hidden',!(NET.open&&NET.roomId)); // 联机中才显示「断开联机」
@@ -384,9 +386,14 @@ function initTouch(){
     },{passive:false});
   }
   bindBtn('btnJump');bindBtn('btnFlyDown');bindBtn('btnMine');bindBtn('btnPlace');bindBtn('btnInv');
+  const bi=$('btnInv');
+  if(bi)bi.addEventListener('click',()=>{if(anyPanelOpen())closeAllPanels();else openInventory();}); // 带鼠标的触屏设备用鼠标点
   const bb=$('btnBook');
-  if(bb)bb.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();
-    if(anyPanelOpen())closeAllPanels();else openBook();},{passive:false});
+  if(bb){
+    bb.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();
+      if(anyPanelOpen())closeAllPanels();else openBook();},{passive:false});
+    bb.addEventListener('click',()=>{if(anyPanelOpen())closeAllPanels();else openBook();}); // preventDefault 已挡掉触屏合成 click
+  }
   // 快捷栏点选
   $('hotbar').addEventListener('touchstart',e=>{
     const el=e.target.closest('.slot');

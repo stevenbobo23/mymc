@@ -66,22 +66,14 @@ function migrateSaves(){
 }
 function setActiveSlot(id){activeSlotId=id||null;try{localStorage.setItem(ACTIVE_KEY,activeSlotId||'');}catch(e){}}
 function getSlotMeta(id){return getSaveIndex().find(x=>x.id===id)||null;}
-function saveNow(msg){ // 手动保存按钮：输入存档名称后保存
+function saveNow(msg){ // 手动保存按钮：静默保存 + toast 反馈（改名请用存档目录的「重命名」）
   if(!started)return;
   if(!activeSlotId)activeSlotId=createSaveSlot(null);
-  const cur=(getSlotMeta(activeSlotId)||{}).name||'';
-  const nm=prompt('存档名称（保存到存档目录）：',cur);
-  if(nm===null)return; // 取消
-  if(nm.trim())renameSaveSlot(activeSlotId,nm.trim());
   saveGame();
   const m=getSlotMeta(activeSlotId);
-  showToast('💾 已保存「'+(m?m.name:'未命名')+'」');
+  showToast(msg||('💾 已保存「'+(m?m.name:'未命名')+'」'));
   const sf=$('saveFab'),sn=$('saveFabName');
   if(sf&&sn)sn.textContent=m?('「'+m.name+'」'):'';
-  // prompt 会释放鼠标指针锁定，保存后重新锁定（触屏不需要）
-  if(!isTouch&&gameState==='playing'&&!player.dead&&document.pointerLockElement===null){
-    setTimeout(()=>{if(gameState==='playing'&&!player.dead)lockPointer();},120);
-  }
 }
 function createSaveSlot(name){
   const idx=getSaveIndex();
@@ -1731,13 +1723,24 @@ function initSceneSelectUI(){
   });
 }
 function initMiscUI(){
-  $('btnCmd').addEventListener('click',()=>{if(anyPanelOpen())closeAllPanels();else openCmd();});
+  const bc=$('btnCmd');
+  bc.addEventListener('click',()=>{if(anyPanelOpen())closeAllPanels();else openCmd();});
+  bc.addEventListener('touchstart',e=>{e.preventDefault();if(anyPanelOpen())closeAllPanels();else openCmd();},{passive:false}); // 触屏也能开指令
   $('cmdRunBtn').addEventListener('click',runCommand);
-  $('cmdInput').addEventListener('keydown',e=>{if(e.key==='Enter')runCommand();e.stopPropagation();});
+  $('cmdInput').addEventListener('keydown',e=>{
+    if(e.code==='Escape'){closeAllPanels();return;} // Esc 关面板：输入框内自行处理（stopPropagation 会挡住全局 Escape）
+    if(e.key==='Enter')runCommand();
+    e.stopPropagation();
+  });
   window.addEventListener('keydown',e=>{
-    if(e.code==='Escape'&&anyPanelOpen())closeAllPanels();
-    if(e.code==='KeyM')toggleMpPanel();
-    if(e.code==='KeyR'&&gameMode==='shooter'){e.preventDefault();reloadGun();} // 枪战换弹
+    if(e.code==='Escape'){
+      if(anyPanelOpen())closeAllPanels();
+      else{ // 全屏弹窗（场景选择/存档目录/跑酷选择）也允许 Esc 退出
+        ['scenePanel','savePanel','parkourPanel'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.add('hidden');});
+      }
+    }
+    if(e.code==='KeyM'&&gameState==='playing'&&typeof player!=='undefined'&&!player.dead)toggleMpPanel(); // 首页/死亡时禁开，防盖住重生按钮
+    if(!e.repeat&&e.code==='KeyR'&&gameMode==='shooter'){e.preventDefault();reloadGun();} // 枪战换弹
     if(e.code==='KeyG'&&gameMode==='shooter'){e.preventDefault();startNadeCharge();} // 按住 G 蓄力手榴弹
   });
   setInterval(saveGame,20000); // 每20秒自动保存
@@ -1880,11 +1883,6 @@ function disposeMenuScene(){
 
 // ---------------- 🧗 世界内跑酷挑战（随时在当前位置生成一条平台路线，不换世界） ----------------
 const parkourChallenge={active:false,startY:0,finish:null,checkpoint:null,cpList:[]};
-function openParkour(){ // 游戏内 HUD/按钮入口
-  const pp=$('parkourPanel');
-  if(pp){pp.classList.remove('hidden');return;}
-  openPanel('parkourPanel');
-}
 // 跑酷平台上面腾出空间：把挡路的树叶、木头都清掉，不会被树遮住
 function clearParkourSpace(px,py,pz,size){
   for(let a=-1;a<=size;a++)for(let c=-1;c<=size;c++)for(let h=0;h<=4;h++){
