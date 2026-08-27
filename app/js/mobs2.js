@@ -2748,18 +2748,20 @@ function updateHandItem(){
   const it=id?ITEMS[id]:null;
   const isSpear=it&&it.toolType==='spear';
   spearVM.visible=!!isSpear;
-  itemPlaneVM.visible=!isSpear&&!!it&&!!it.icon;
+  const has3D=it&&(it.type==='gun'||it.type==='grenade'||it.type==='mine'||it.type==='block'||id===I.missile||id===I.bow); // 这些有 3D 模型（player2 handView），图标别叠加
+  itemPlaneVM.visible=!isSpear&&!has3D&&!!it&&!!it.icon;
   if(isSpear){
     spearVM.userData.headMat.color.setHex(SPEAR_HEAD_COLOR[it.key]||0xa5824d);
   }else if(itemPlaneVM.visible){
     const tmp=document.createElement('canvas');tmp.width=16;tmp.height=16;
     drawItemIcon(tmp.getContext('2d'),id);
-    const cv=document.createElement('canvas');cv.width=32;cv.height=32;
+    const cv=document.createElement('canvas');cv.width=64;cv.height=64; // 4x 放大，NearestFilter 保持像素锐利
     const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
-    ctx.drawImage(tmp,0,0,32,32);
+    ctx.drawImage(tmp,0,0,64,64);
     if(itemPlaneVM.material.map)itemPlaneVM.material.map.dispose();
     itemPlaneVM.material.map=new THREE.CanvasTexture(cv);
     itemPlaneVM.material.map.magFilter=THREE.NearestFilter;
+    itemPlaneVM.material.map.minFilter=THREE.NearestFilter;
     itemPlaneVM.material.needsUpdate=true;
   }
 }
@@ -3171,11 +3173,11 @@ function initSpearView(){
   spearInitDone=true;
   const hg=new THREE.Group();
   camera.add(hg);
-  // 普通物品：画着图标的小面片
-  itemPlaneVM=new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.34),
+  // 普通物品：画着图标的小面片（64px 像素风，尺寸小巧不挡视野）
+  itemPlaneVM=new THREE.Mesh(new THREE.PlaneGeometry(0.12,0.12),
     new THREE.MeshBasicMaterial({transparent:true,alphaTest:0.1}));
-  itemPlaneVM.position.set(0.38,-0.3,-0.62);
-  itemPlaneVM.rotation.set(0.1,-0.35,0.15);
+  itemPlaneVM.position.set(0.36,-0.27,-0.6);
+  itemPlaneVM.rotation.set(0.08,-0.4,0.2);
   hg.add(itemPlaneVM);
   // 🔱 长矛：3D 的！长长的木杆+材料颜色的矛头（像原版拿三叉戟一样）
   spearVM=new THREE.Group();
