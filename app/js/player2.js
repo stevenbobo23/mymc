@@ -74,8 +74,8 @@ function physicsStep(dt,input){
   player.vel.x=lerp(player.vel.x,dirX*speed,clamp(ctrl*dt*12,0,1));
   player.vel.z=lerp(player.vel.z,dirZ*speed,clamp(ctrl*dt*12,0,1));
   // 重力/跳跃
-  if(gameMode==='creative'){
-    // 创造模式：飞行（跳跃=上升，Shift/下降键=下降，否则悬停）
+  if(gameMode==='creative'&&flying){
+    // 创造模式：飞行（跳跃=上升，Shift/下降键=下降，否则悬停）；双击Shift可关闭
     const flySp=input.sprint?11:6.5;
     const vy=input.jump?flySp:(flyDown?-flySp:0);
     player.vel.y=lerp(player.vel.y,vy,clamp(dt*10,0,1));
@@ -103,7 +103,7 @@ function physicsStep(dt,input){
     const landB=getBlock(Math.floor(player.pos.x),Math.floor(player.pos.y),Math.floor(player.pos.z));
     const underB=getBlock(Math.floor(player.pos.x),Math.floor(player.pos.y)-1,Math.floor(player.pos.z));
     const safeWater=player.inWater||landB===B_WATER||underB===B_WATER;
-    if(dist>4&&player.vel.y<=0.01&&!safeWater&&!(player.slowT>0)){
+    if(dist>4&&player.vel.y<=0.01&&!safeWater&&!(player.slowT>0)&&gameMode!=='creative'){ // 创造模式关飞行坠落也不摔伤
       const armor=totalArmor();
       let dmg=Math.floor(dist-3);
       dmg=Math.max(0,Math.round(dmg*(1-Math.min(armor*0.04,0.8))));
@@ -206,6 +206,9 @@ let gameState='start'; // start|playing|dead
 const keys={};
 const input={f:0,r:0,jump:false,sprint:false};
 let mining=false;
+let flying=false; // 创造模式飞行：双击空格起飞 / 双击Shift降落（MC同款）
+let lastShiftT=0;
+let lastSpaceT=0;
 let pointerLocked=false;
 function $(id){return document.getElementById(id);}
 function show(id){$(id).classList.remove('hidden');}
@@ -242,6 +245,20 @@ function initControls(){
       if(anyPanelOpen()){closeAllPanels();e.preventDefault();return;}
       toggleTasks();
       e.preventDefault();
+    }
+    if(gameMode==='creative'&&(e.code==='Space'||e.code==='ShiftLeft'||e.code==='ShiftRight')){
+      // MC 同款：双击空格起飞，双击 Shift 降落
+      const now=performance.now();
+      if(e.code==='Space'&&!flying&&now-lastSpaceT<300){
+        flying=true;showToast('✈️ 起飞！空格上升 · Shift 下降 · 双击Shift降落');
+        lastSpaceT=0;
+      }else if(e.code==='Space'){lastSpaceT=now;}
+      if((e.code==='ShiftLeft'||e.code==='ShiftRight')){
+        if(flying&&now-lastShiftT<300){
+          flying=false;showToast('🚶 已降落，双击空格再次起飞');
+          lastShiftT=0;
+        }else lastShiftT=now;
+      }
     }
     if(e.code.indexOf('Digit')===0){
       const n=+e.code.slice(5);

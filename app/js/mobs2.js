@@ -3173,11 +3173,11 @@ function initSpearView(){
   spearInitDone=true;
   const hg=new THREE.Group();
   camera.add(hg);
-  // 普通物品：画着图标的小面片（64px 像素风，尺寸小巧不挡视野）
-  itemPlaneVM=new THREE.Mesh(new THREE.PlaneGeometry(0.12,0.12),
+  // 普通物品：画着图标的小面片（64px 像素风，贴屏幕右下角）
+  itemPlaneVM=new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.34),
     new THREE.MeshBasicMaterial({transparent:true,alphaTest:0.1}));
-  itemPlaneVM.position.set(0.36,-0.27,-0.6);
-  itemPlaneVM.rotation.set(0.08,-0.4,0.2);
+  itemPlaneVM.position.set(0.38,-0.3,-0.62);
+  itemPlaneVM.rotation.set(0.1,-0.35,0.15);
   hg.add(itemPlaneVM);
   // 🔱 长矛：3D 的！长长的木杆+材料颜色的矛头（像原版拿三叉戟一样）
   spearVM=new THREE.Group();
