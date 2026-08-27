@@ -148,13 +148,14 @@ function restoreShooterSave(save){
 }
 // 通用"载入存档进入游戏"（开始界面继续 / 存档目录进入 共用）
 let pendingSaveWasLoaded=false; // 本局是否从存档进来（oneblock 用）
-function enterSaveSlot(id){
+function enterSaveSlot(id,opt){
   const sd=loadSave(id);
   if(!sd)return false;
   pendingSaveWasLoaded=true;
   setActiveSlot(id);
   if(sd.gameMode==='shooter')restoreShooterSave(sd);
   else{
+    if(opt&&opt.modeOverride&&opt.modeOverride!=='shooter')sd.gameMode=opt.modeOverride; // 首页模式选择覆盖存档模式
     gameMode=sd.gameMode||gameMode;
     sd.gameMode=gameMode;sd.skinIdx=skinIdx;
     setupWorld(sd.seed,sd);
@@ -1672,8 +1673,9 @@ function initNetUI(){
   if(modConfirm)modConfirm.addEventListener('click',()=>{
     $('modPanel').classList.add('hidden');
     showToast('🧩 模组设置已保存，开始游戏！');
-    // 与主「点击开始」同逻辑：有存档继续，没存档新世界
-    if(pendingSave&&activeSlotId){enterSaveSlot(activeSlotId);pendingSave=null;}
+    // 按首页选的生存/创造开局：继续存档时也用当前选择覆盖存档模式（用户刚选的，优先级更高）
+    const chosen=gameMode;
+    if(pendingSave&&activeSlotId){enterSaveSlot(activeSlotId,{modeOverride:chosen});pendingSave=null;}
     else startGame();
   });
   document.querySelectorAll('.mod-row').forEach(row=>{

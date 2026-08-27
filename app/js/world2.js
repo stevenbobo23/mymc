@@ -1830,9 +1830,9 @@ function lightningStrike(){ // 一道闪电劈在附近！⚡ 有避雷针就全
   const px=Math.floor(player.pos.x),pz=Math.floor(player.pos.z);
   const rod=findRodNear(px,pz,48); // 附近有避雷针？闪电全部跑去劈它！
   let lx,lz,ly;
+  const ang=Math.random()*Math.PI*2,dist=rod?0:(8+Math.random()*35); // 避雷针时距离按 0 算（雷声几乎同时到）
   if(rod){lx=rod[0];lz=rod[2];ly=rod[1];}
   else{
-    const ang=Math.random()*Math.PI*2,dist=8+Math.random()*35;
     lx=Math.floor(player.pos.x+Math.cos(ang)*dist);lz=Math.floor(player.pos.z+Math.sin(ang)*dist);
     ly=surfaceY(lx,lz);
   }
