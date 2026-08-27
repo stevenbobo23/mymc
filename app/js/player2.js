@@ -443,14 +443,7 @@ const HAND_POS={x:0.36,y:-0.30,z:-0.62}; // 相机空间：画面右下角
 function initHandView(){
   if(handGroup||!camera)return;
   handGroup=new THREE.Group();
-  // 手臂（肤色）从画面底角伸向武器
-  const arm=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.27,0.085),new THREE.MeshLambertMaterial({color:0xd8a06a}));
-  arm.position.set(0,-0.07,-0.02);
-  handGroup.add(arm);
-  // 手掌
-  const palm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.09,0.07),new THREE.MeshLambertMaterial({color:0xd8a06a}));
-  palm.position.set(0,0.06,-0.12);
-  handGroup.add(palm);
+  // 不再渲染手臂/手掌：空手不显示任何东西，拿什么显示什么
   handWeapon=new THREE.Group();
   handWeapon.position.set(0,0.08,-0.16);
   handGroup.add(handWeapon);
@@ -466,7 +459,37 @@ function buildWeaponModel(id){
   const box=(w,h,d,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);g.add(m);return m;};
   const cyl=(r,h,mat,x,y,z)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,8),mat);m.rotation.x=Math.PI/2;m.position.set(x,y,z);g.add(m);return m;};
   const it=id?ITEMS[id]:null;const type=it?it.type:null;
-  if(id===I.missile){ // 追踪导弹：白色细长弹体 + 红色弹头 + 尾翼
+  if(type==='tool'){ // 工具：按 toolType 生成对应模型，材质色随工具等级
+    const hex={wood:0xb08b4d,stone:0x8f8f8f,iron:0xe8e8e8,gold:0xffd94a,diamond:0x4ae8dd,netherite:0x574b5e,
+      redstone:0xe83a2a,coal:0x2b2b2b,emerald:0x3ac85a,copper:0xe08850,lapis:0x3a5ad8,obsidian:0x3a2a5e,bedrock:0x6a6a6a};
+    const matKey=Object.keys(I).find(k=>I[k]===id&&k!=='').toString().split('_')[0];
+    const headMat=M(hex[matKey]!==undefined?hex[matKey]:0xc8c8c8);
+    if(it.toolType==='sword'){ // 剑：斜握长刃
+      const blade=box(0.04,0.52,0.075,headMat,0,0.14,-0.06);
+      blade.rotation.z=-0.5; // 剑刃向前倾
+      box(0.13,0.025,0.05,dark,0,-0.06,-0.1).rotation.z=-0.5; // 护手
+      cyl(0.02,0.14,darkwood,0,-0.14,-0.13).rotation.x=Math.PI/2-0.4; // 握把
+    }else{ // 镐/斧/锹/锄头：木柄斜握，工具头朝前上方
+      const stick=box(0.03,0.4,0.03,wood,0,0,-0.02);
+      stick.rotation.x=-0.9; // 柄从右下伸向左前
+      if(it.toolType==='pick'){
+        const head=box(0.3,0.05,0.055,headMat,0,0.2,-0.1);
+        head.rotation.z=0.15;head.rotation.x=-0.9;
+        box(0.055,0.05,0.055,headMat,0,0.15,-0.06).rotation.x=-0.9;
+      }else if(it.toolType==='axe'){
+        const blade=box(0.15,0.15,0.04,headMat,0.05,0.18,-0.08);
+        blade.rotation.x=-0.9;
+        box(0.05,0.07,0.05,headMat,0,0.14,-0.04).rotation.x=-0.9;
+      }else if(it.toolType==='shovel'){
+        const spade=box(0.12,0.16,0.035,headMat,0,0.24,-0.1);
+        spade.rotation.x=-0.9;
+      }else{
+        box(0.13,0.045,0.045,headMat,0.03,0.2,-0.09).rotation.x=-0.9; // 锄头横钩
+        box(0.045,0.1,0.045,headMat,0.08,0.14,-0.06).rotation.x=-0.9;
+      }
+    }
+  }
+  else if(id===I.missile){ // 追踪导弹：白色细长弹体 + 红色弹头 + 尾翼
     box(0.1,0.1,0.4,grey,0,0,-0.28); // 弹身
     box(0.07,0.07,0.1,M(0xb03030),0,0,-0.5); // 红色弹头
     box(0.14,0.02,0.05,M(0x8a8a8a),0,0.07,-0.06); // 尾翼
