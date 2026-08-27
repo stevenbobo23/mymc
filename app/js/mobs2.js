@@ -1255,6 +1255,22 @@ function shootRayAt(yaw,pitch,range){
     }
   }
   if(best)return best;
+  // 单人/非枪战：判怪物命中（最近的怪，子弹不穿墙）
+  if(typeof mobs!=='undefined'){
+    let bestMob=null;
+    for(const m of mobs){
+      if(m.dead)continue;
+      const box=new THREE.Box3(
+        new THREE.Vector3(m.pos.x-0.4,m.pos.y,m.pos.z-0.4),
+        new THREE.Vector3(m.pos.x+0.4,m.pos.y+1.8,m.pos.z+0.4));
+      const hit=ray.intersectBox(box,new THREE.Vector3());
+      if(hit){
+        const d=hit.distanceTo(origin);
+        if(d<range&&d<blockD&&(!bestMob||d<bestMob.d))bestMob={mob:m,d};
+      }
+    }
+    if(bestMob)return bestMob;
+  }
   // 未命中玩家：若子弹在射程内被墙/地挡住，返回命中点（用于 miss 火花）
   if(blockD<range)return {block:true,d:blockD,x:origin.x+dir.x*blockD,y:origin.y+dir.y*blockD,z:origin.z+dir.z*blockD};
   return null;
@@ -1307,6 +1323,13 @@ function tryShootGun(){
     if(hit&&hit.block){
       // 子弹打中墙/地：miss 火花（本地显示即可）
       spawnMissSpark(hit.x,hit.y,hit.z);
+    }else if(hit&&hit.mob){
+      // 单人/非枪战：打中怪物，直接结算伤害
+      const dmg=Math.round(g.dmg*(hit.hs?2:1));
+      hurtMob(hit.mob,dmg);
+      if(NET.open&&!NET.isHost&&hit.mob.nid)netBroadcast({t:'mobhit',id:hit.mob.nid,dmg});
+      spawnBlood(hit.mob.pos.x,hit.mob.pos.y+1,hit.mob.pos.z,-Math.sin(yaw),-Math.cos(yaw));
+      showDmgNumber(hit.mob.pos.x,hit.mob.pos.y+1.3,hit.mob.pos.z,dmg,false);
     }else if(hit&&NET.open&&NET.roomId){
       const hs=!!hit.hs;
       const dmg=Math.round(g.dmg*(hs?2:1)); // 爆头 2 倍
@@ -2579,8 +2602,9 @@ function updateArrows(dt){
 }
 function tryAttackMob(){
   if(!inputEnabled())return;
+  const heldNow=heldItemId(),itNow=heldNow?ITEMS[heldNow]:null;
+  if(itNow&&(itNow.type==='gun'||itNow.type==='missile')&&tryShootGun())return; // 拿枪/导弹：任何模式左键开枪（与 yangcraft 一致）
   if(gameMode==='shooter'){
-    if(tryShootGun())return; // 有枪/导弹：开枪
     // 徒手近战：没拿武器也能攻击（小伤害 1，遇到残血敌人可以补刀）
     const mh=mobRaycast(), ph=playerRaycast();
     if(mh&&(!ph||mh.d<=ph.d)){

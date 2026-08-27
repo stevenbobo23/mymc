@@ -369,6 +369,19 @@ function initTouch(){
     knob.style.transform='translate(calc(-50% + '+dx+'px),calc(-50% + '+dy+'px))';
     joy.x=dx/max;joy.y=dy/max;
   }
+  // 点按摇杆边缘 = 朝该方向走一小步（带鼠标的触屏设备/辅助操作用）
+  joyEl.addEventListener('click',e=>{
+    if(!inputEnabled())return;
+    const r=joyEl.getBoundingClientRect();
+    let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+    const max=r.width/2;
+    joy.x=clamp(dx/max,-1,1);joy.y=clamp(dy/max,-1,1);joy.active=true;
+    knob.style.transform='translate(calc(-50% + '+(joy.x*max*0.6)+'px),calc(-50% + '+(joy.y*max*0.6)+'px))';
+    setTimeout(()=>{
+      joy.active=false;joy.x=0;joy.y=0;
+      knob.style.transform='translate(-50%,-50%)';
+    },260);
+  });
   // 视角拖动(右半屏空白处)
   document.addEventListener('touchstart',e=>{
     if(gameState!=='playing')return;
@@ -403,6 +416,15 @@ function initTouch(){
     },{passive:false});
   }
   bindBtn('btnJump');bindBtn('btnFlyDown');bindBtn('btnMine');bindBtn('btnPlace');bindBtn('btnInv');
+  // 带鼠标的触屏设备（或自动化）：核心按钮补鼠标 click（touchstart 已 preventDefault，不会双触发）
+  const tapClick=(id,down,up)=>{
+    const el=$(id);if(!el)return;
+    el.addEventListener('click',()=>{down();if(up)up();});
+  };
+  tapClick('btnJump',()=>{jumpBtn=true;setTimeout(()=>{jumpBtn=false;},120);});
+  tapClick('btnFlyDown',()=>{flyDownBtn=true;setTimeout(()=>{flyDownBtn=false;},120);});
+  tapClick('btnMine',()=>{if(heldIsFood()){eatFood();}else if(heldItemId()&&ITEMS[heldItemId()]&&ITEMS[heldItemId()].potion){drinkPotion(ITEMS[heldItemId()].potion);}else{mining=true;tryAttackMob();setTimeout(()=>{mining=false;},120);}});
+  tapClick('btnPlace',()=>interactOrPlace());
   const bi=$('btnInv');
   if(bi)bi.addEventListener('click',()=>{if(anyPanelOpen())closeAllPanels();else openInventory();}); // 带鼠标的触屏设备用鼠标点
   const bb=$('btnBook');
