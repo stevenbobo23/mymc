@@ -101,7 +101,7 @@ function touchSaveMeta(id){
 }
 // 存档版本：每做一次 id 迁移/结构变更就 +1；读档时按 save.v 判断要不要跑迁移
 // （以前是 `save.v===1` 且 writeSave 永远写 v=1 → 每次读档都跑迁移，没法安全演进）
-const SAVE_V=2;
+const SAVE_V=3;
 function saveGame(slotId){
   if(!started||player.dead)return;
   if(gameMode==='parkour')return; // 跑酷：单局模式不存档（存档恢复不支持，避免污染存档槽）
@@ -544,6 +544,25 @@ function setupWorld(seed,save){
       if(inv.armor)inv.armor=inv.armor.map(migrateStack);
       for(const k in blockDiff)if(blockDiff[k]===49)blockDiff[k]=75; // 树苗方块
       for(const dn of Object.keys(DIMS)){const D=DIMS[dn];if(D&&D.diff)for(const k in D.diff)if(D.diff[k]===49)D.diff[k]=75;}
+    }
+    // 🧰 物品 id 让位迁移（仅 save.v<3 的老档）：100~103 → 900~903
+    //    defItem 早期从 100 起递增分配，100~103 分别给了 木棍/皮革/腐肉/红石粉，
+    //    但这 4 个 id 同时被方块物品（红石块/嘎吱核心/灰树叶/避雷针）占用，
+    //    方块物品后注册覆盖真物品 → 挖红石矿掉「避雷针」（已于 v3 修复：真物品让位到 900+）。
+    //    老存档里存的仍是 100~103，而木棍是几乎一切工具/装备/装置的核心材料，
+    //    不迁移就会出现「所有配方都合成不出来、背包里木棍显示成红石块」。
+    //    ⚠️ blockDiff 不能动：方块 100~103 是红石块/嘎吱核心/灰树叶/避雷针，改了会毁世界。
+    if(save.v&&save.v<3||!save.v){
+      const ID_MOVE={100:900,101:901,102:902,103:903};
+      const moveOldId=s=>{if(s&&ID_MOVE[s.id]!==undefined)s.id=ID_MOVE[s.id];return s;};
+      inv.hot=inv.hot.map(moveOldId);
+      if(inv.store)inv.store=inv.store.map(moveOldId);
+      if(inv.armor)inv.armor=inv.armor.map(moveOldId);
+      // 容器里的东西同样要迁移：箱子 27 格、熔炉的 输入/燃料/产出
+      const moveChest=C=>{if(!C)return;for(const k in C){const st=C[k];if(st&&st.slots)st.slots=st.slots.map(moveOldId);}};
+      const moveFurn=F=>{if(!F)return;for(const k in F){const st=F[k];if(!st)continue;st.in=moveOldId(st.in);st.fuel=moveOldId(st.fuel);st.out=moveOldId(st.out);}};
+      moveChest(chestStates);moveFurn(furnStates);
+      for(const dn of Object.keys(DIMS)){moveChest(DIMS[dn].chest);moveFurn(DIMS[dn].furn);}
     }
     if(save.tasks)for(let i=0;i<TASKS.length&&i<save.tasks.length;i++)TASKS[i].done=!!save.tasks[i];
     if(typeof save.hp==='number')player.hp=save.hp;

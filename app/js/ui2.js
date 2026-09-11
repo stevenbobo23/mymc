@@ -701,7 +701,7 @@ function doEnchant(){
   showToast('✨ 附魔成功！'+ITEMS[s.id].name+'获得 '+tg.n+' '+(lv+1)+'级！');
   refreshAll();updateEnchInfo();
 }
-function openBook(){openPanel('bookPanel');}
+function openBook(){openPanel('bookPanel');buildBook();}
 // ---------------- 指令系统（管理员=房主） ----------------
 function applyGameMode(m,silent){
   gameMode=m;
@@ -787,11 +787,21 @@ function itemCell(id,count){
   if(count>1){const s=document.createElement('span');s.className='n';s.textContent='×'+count;c.appendChild(s);}
   return c;
 }
+let bookModSig='';
 function buildBook(){
   const list=$('bookList');
-  if(!list||list.childElementCount>0)return;
+  if(!list)return;
+  // 模组开关变了就重建（否则关了模组仍列着一堆拿不到材料的配方，玩家会以为「配方是错的」）
+  const sig=Object.keys(modsOn).map(k=>modsOn[k]?1:0).join('');
+  if(list.childElementCount>0&&sig===bookModSig)return;
+  bookModSig=sig;
+  list.innerHTML='';
   let lastGroup='';
   for(const r of RECIPES){
+    const outIt=ITEMS[r.out.id];
+    if(!outIt||!outIt.name)continue;            // 产出无效的配方不显示（防止 undefined 条目再出现）
+    if(outIt.hideInCreative)continue;
+    if(outIt.mod&&!modsOn[outIt.mod])continue;  // 与创造栏口径一致：模组没开就不显示
     if(r.group!==lastGroup){
       lastGroup=r.group;
       const g=document.createElement('div');g.className='bk-group';g.textContent=lastGroup||'基础';

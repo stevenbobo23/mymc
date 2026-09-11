@@ -1467,6 +1467,49 @@ function registerContent(){
   if(ITEMS[I.bread])ITEMS[I.bread].food=3;
   if(ITEMS[I.wheat])ITEMS[I.wheat].food=1;
   if(ITEMS[I.rotten_flesh])ITEMS[I.rotten_flesh].food=-2; // 腐肉：吃了掉血
+  // ⚠️ 以下新增物品必须放在本函数最末尾：defItem 的 id 是按调用顺序递增分配的，
+  //    往里插队会让后面所有物品 id 整体位移，老存档直接错位。只能追加。
+  // ---------- 泰坦工具补全 ----------
+  // 历史上只有「泰坦之剑」，但 buildRecipes 的 tm2（全材质装备）循环带了 titan 前缀，
+  // 于是镐/斧/锹/锄 4 条配方一直存在、产出却是 undefined —— 玩家摆好材料合成出空气。
+  defItem('titan_pickaxe','泰坦镐',{icon:toolIcon('pick','#c04ae8'),type:'tool',toolType:'pick',speed:20,tier:7,dmg:900,maxStack:1,mod:'titan'});
+  defItem('titan_axe','泰坦斧',{icon:toolIcon('axe','#c04ae8'),type:'tool',toolType:'axe',speed:18,tier:7,dmg:900,maxStack:1,mod:'titan'});
+  defItem('titan_shovel','泰坦锹',{icon:toolIcon('shovel','#c04ae8'),type:'tool',toolType:'shovel',speed:18,tier:7,dmg:900,maxStack:1,mod:'titan'});
+  defItem('titan_hoe','泰坦锄头',{icon:toolIcon('hoe','#c04ae8'),type:'tool',toolType:'hoe',speed:5,tier:7,dmg:900,maxStack:1,mod:'titan'});
+  // ---------- 掉落扩展新增物品 ----------
+  defItem('bone','骨头',{icon:ctx=>{
+    P(ctx,4,4,2,8,'#e8e6dc');P(ctx,10,4,2,8,'#e8e6dc');
+    P(ctx,5,6,6,3,'#f4f2ea');P(ctx,3,3,3,3,'#f4f2ea');P(ctx,10,10,3,3,'#f4f2ea');
+    P(ctx,4,4,1,6,'#ffffff');
+  }});
+  defItem('spider_eye','蜘蛛眼',{icon:ctx=>{
+    P(ctx,4,5,8,6,'#8a1a1a');P(ctx,3,6,10,4,'#a82a2a');
+    P(ctx,6,6,4,4,'#2a0a0a');P(ctx,7,6,1,1,'#ff6a6a');
+  }});
+  defItem('gunpowder','火药',{icon:ctx=>{
+    P(ctx,3,8,10,5,'#6a6a6a');P(ctx,4,6,8,3,'#8a8a8a');
+    P(ctx,5,5,3,2,'#b0b0b0');P(ctx,9,7,2,2,'#4a4a4a');P(ctx,6,10,2,2,'#4a4a4a');
+  }});
+  defItem('raw_beef','生牛肉',{icon:ctx=>{
+    P(ctx,3,5,10,7,'#a83a3a');P(ctx,4,4,8,9,'#c04a4a');
+    P(ctx,5,6,4,3,'#e07070');P(ctx,3,10,10,2,'#f0d8c0');P(ctx,4,11,8,1,'#e8c8a8');
+  },food:3});
+  defItem('raw_porkchop','生猪排',{icon:ctx=>{
+    P(ctx,3,5,10,7,'#e08a8a');P(ctx,4,4,8,8,'#f0a0a0');
+    P(ctx,5,6,4,3,'#ffc0c0');P(ctx,3,9,10,3,'#f8e0d0');P(ctx,4,10,8,2,'#f0d0c0');
+  },food:3});
+  defItem('cooked_beef','牛排',{icon:ctx=>{
+    P(ctx,3,5,10,7,'#7a3a1a');P(ctx,4,4,8,9,'#9a4a22');
+    P(ctx,5,6,4,3,'#b86a3a');P(ctx,3,10,10,2,'#c09060');
+  },food:8});
+  defItem('cooked_porkchop','熟猪排',{icon:ctx=>{
+    P(ctx,3,5,10,7,'#b06a3a');P(ctx,4,4,8,8,'#cc8a4a');
+    P(ctx,5,6,4,3,'#e0a86a');P(ctx,3,9,10,3,'#e8c090');
+  },food:8});
+  defItem('feather','羽毛',{icon:ctx=>{
+    P(ctx,7,3,2,10,'#c8c4b8');
+    P(ctx,4,4,4,3,'#ffffff');P(ctx,5,6,4,3,'#f4f2ea');P(ctx,6,8,4,3,'#e8e6dc');
+  }});
 }
 
 // ---------------- 合成配方 ----------------
@@ -1506,7 +1549,7 @@ function buildRecipes(){
   addShaped(['OOO','O O','OOO'],{O:B_OBSIDIAN},B_PORTAL,1); // 黑曜石围一圈=下界传送门
   addShaped(['DGD','GOG','DGD'],{D:I.diamond,G:B_GLOWSTONE,O:B_OBSIDIAN},B_ENDPORTAL,1); // 钻石+荧石+黑曜石=末地传送门
   addShaped([' TS','T S',' TS'],{T:I.stick,S:I.string},I.bow,1); // 3木棍+3线=弓
-  addShapeless({[I.stick]:1},I.arrow,4); // 木棍做箭
+  addShapeless({[I.stick]:1,[I.feather]:1},I.arrow,4); // 木棍+羽毛=箭（羽毛来自鸡与骷髅）
   addShapeless({[I.wheat]:3},I.bread,1); // 三个小麦做面包
   addShapeless({[I.wheat]:1},I.seeds,2); // 一个小麦搓出两颗种子
   addShapeless({[I.iron_ingot]:1},I.iron_nugget,9);
@@ -1560,6 +1603,7 @@ function buildRecipes(){
   addShapeless({[I.iron_ingot]:6,[I.redstone]:3},I.gun_mg,1); // 6铁锭+3红石=机关枪（摆满工作台）
   addShapeless({[I.infinity_ingot]:2,[I.iron_ingot]:3,[I.redstone]:2},I.gun_infinity,1); // 2无尽贪婪锭+3铁锭+2红石=无尽贪婪枪
   addShapeless({[B_SAND]:2,[I.redstone]:2},B_TNT,1); // 2沙子+2红石=TNT
+  addShapeless({[B_SAND]:2,[I.gunpowder]:2},B_TNT,1); // 2沙子+2火药=TNT（苦力怕掉的火药也能用）
   addShapeless({[B_TNT]:1,[I.blaze_powder]:4},B_SUPER_TNT,1); // TNT+4冶炼粉=超级TNT
   addShapeless({[B_SUPER_TNT]:1,[B_TNT]:4,[I.command_book]:1},B_BOMB,1); // 超级TNT+4TNT+命令方块之书=恐怖炸弹
   addShapeless({[B_OBSIDIAN]:4,[I.diamond]:1,[I.ender_pearl]:2},B_ALTAR,1); // 4黑曜石+1钻石+2末影珍珠=凋零风暴祭坛
@@ -1594,7 +1638,6 @@ function buildRecipes(){
   addShapeless({[I.gold_ingot]:4,[I.bread]:1},I.golden_apple,1); // 🍎 4个金锭+1个面包=金苹果！
   addShaped(['IGI','GRG','IGI'],{I:I.iron_ingot,G:B_GLASS,R:I.redstone},B_COPIER,2); // 📋 十字形=2个复制方块
   addShaped(['C','C','C'],{C:I.copper_ingot},B_ROD,1); // ⚡ 3个铜锭竖着摆=避雷针！
-  addShaped(['C','C','C'],{C:I.copper_ingot},B_ROD,1);
   addShapeless({[B_TNT]:1,[B_SUPER_TNT]:1},B_TNT_BIG,1); // 🧨 更多TNT
   addShapeless({[B_TNT]:1,[B_TORCH]:1},B_TNT_FIRE,1);
   addShapeless({[B_TNT]:1,[B_GLASS]:1},B_TNT_ICE,1);
@@ -1639,7 +1682,13 @@ function buildRecipes(){
   addShapeless({[I.iron_ingot]:3,[B_OBSIDIAN]:2,[I.ender_pearl]:1},I.titan_golem_egg,1);
   addShapeless({[I.titan_soul]:1,[B_OBSIDIAN]:2,[I.ender_pearl]:1},I.titan_warden_egg,1);
   addShapeless({[I.titan_soul]:3,[B_OBSIDIAN]:2,[I.ender_pearl]:1},I.witherzilla_egg,1);
-  addShaped(['M','M','S'],{M:I.titan_soul,S:I.stick},I.titan_sword,1); // 💜 泰坦之剑
+  // （泰坦之剑的配方由上方 tm2「全材质装备」循环生成，这里原本还有一条完全重复的，已删）
+  // 👑 创世盔甲：god_helmet/chest/legs/boots 四个物品一直存在，却从来没有配方 ——
+  //    打死 HIM 掉的创世之核无处可用。补上 4 条（图案与其它盔甲一致）。
+  {
+    const gp={helmet:['MMM','M M'],chest:['M M','MMM','MMM'],legs:['MMM','M M','M M'],boots:['M M','M M']};
+    for(const k of ['helmet','chest','legs','boots'])addShaped(gp[k],{M:I.god_core},I['god_'+k],1);
+  }
 
   // 金属块：3x3 材料压缩/解压
   for(const bp of [[I.iron_ingot,B_IRON_BLOCK],[I.gold_ingot,B_GOLD_BLOCK],[I.diamond,B_DIAMOND_BLOCK],[I.netherite_ingot,B_NETHERITE_BLOCK],[I.infinity_ingot,B_INFINITY_BLOCK],[I.emerald,B_EMERALD_BLOCK]]){
@@ -1662,7 +1711,10 @@ function buildSmelt(){
   SMELT[B_GOLD_ORE]=I.gold_ingot;
   SMELT[B_DEBRIS]=I.netherite_scrap;
   SMELT[B_SAND]=B_GLASS;
+  SMELT[B_COBBLE]=B_STONE; // 圆石烧成石头（原版最基础的烧炼配方，之前漏了）
   SMELT[I.rotten_flesh]=I.leather; // 腐肉烧成皮革
+  SMELT[I.raw_beef]=I.cooked_beef; // 生牛肉→牛排
+  SMELT[I.raw_porkchop]=I.cooked_porkchop; // 生猪排→熟猪排
   SMELT[B_LOG]=I.charcoal;
 }
 const FUEL={};

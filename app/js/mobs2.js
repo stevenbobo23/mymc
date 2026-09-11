@@ -477,7 +477,7 @@ function updateCreaking(m,dt){ // 嘎吱怪：没人看时才动，天亮消失�
   mobMoveAxis(m,'x',m.vel.x*dt);
   mobMoveAxis(m,'z',m.vel.z*dt);
   mobMoveAxis(m,'y',m.vel.y*dt);
-  if(!m.frozen&&dist<1.5&&m.atkT<=0&&!player.dead){
+  if(!m.frozen&&dist<1.5&&m.atkT<=0&&!player.dead&&meleeHeightOk(m)){
     damagePlayer(2,'被嘎吱怪偷袭了');
     m.atkT=0.9;
     player.vel.x+=dx/dist*5;player.vel.z+=dz/dist*5;player.vel.y=3;
@@ -516,7 +516,7 @@ function updateGolem(m,dt){ // 铁傀儡：平时散步巡逻，你打它或打�
   mobMoveAxis(m,'z',m.vel.z*dt);
   mobMoveAxis(m,'y',m.vel.y*dt);
   if(m.blocked){m.yaw+=Math.PI/2;m.dirT=1;}
-  if(hunting&&dist<2.0&&m.atkT<=0){ // 把你打飞！
+  if(hunting&&dist<2.0&&m.atkT<=0&&meleeHeightOk(m)){ // 把你打飞！
     damagePlayer(4,'被铁傀儡打飞了');
     m.atkT=1.2;
     if(dist>0.1){player.vel.x+=dx/dist*5;player.vel.z+=dz/dist*5;player.vel.y=5;}
@@ -566,7 +566,7 @@ function updateZombie(m,dt){ // 僵尸：夜晚追击玩家，天亮自燃（末
   mobMoveAxis(m,'x',m.vel.x*dt);
   mobMoveAxis(m,'z',m.vel.z*dt);
   mobMoveAxis(m,'y',m.vel.y*dt);
-  if(dist<1.6&&m.atkT<=0&&!player.dead){
+  if(dist<1.6&&m.atkT<=0&&!player.dead&&meleeHeightOk(m)){
     damagePlayer(m.type==='enderman'?2:1.5,m.type==='enderman'?'被末影人打了':'被僵尸咬了');
     m.atkT=1.0;
     if(dist>0.1){player.vel.x+=dx/dist*4;player.vel.z+=dz/dist*4;player.vel.y=2.5;}
@@ -755,7 +755,7 @@ function updateSpider(m,dt){
   m.vel.y-=22*dt;m.vel.y=Math.max(m.vel.y,-30);
   m.onGround=false;
   mobMoveAxis(m,'x',m.vel.x*dt);mobMoveAxis(m,'z',m.vel.z*dt);mobMoveAxis(m,'y',m.vel.y*dt);
-  if(hostile&&dist<1.5&&m.atkT<=0&&!player.dead){
+  if(hostile&&dist<1.5&&m.atkT<=0&&!player.dead&&meleeHeightOk(m)){
     damagePlayer(1.5,'被蜘蛛咬了');m.atkT=1.0;
   }
   if(m.pos.y<-5){killMob(m,true);return;}
@@ -878,7 +878,7 @@ function updateWarden(m,dt){
   m.vel.y-=22*dt;m.vel.y=Math.max(m.vel.y,-30);
   m.onGround=false;
   mobMoveAxis(m,'x',m.vel.x*dt);mobMoveAxis(m,'z',m.vel.z*dt);mobMoveAxis(m,'y',m.vel.y*dt);
-  if(dist<2.6&&m.atkT<=0&&!player.dead){ // 一巴掌超痛！
+  if(dist<2.6&&m.atkT<=0&&!player.dead&&meleeHeightOk(m)){ // 一巴掌超痛！（但打不到隔着一层的你）
     damagePlayer(8,'被坚守者拍扁了');
     m.atkT=1.2;
     if(dist>0.1){player.vel.x+=dx/dist*8;player.vel.z+=dz/dist*8;player.vel.y=5;}
@@ -976,7 +976,7 @@ function updateMobs(dt){
       if(!player.dead&&(m.type==='zombie'||m.type==='enderman'||m.type==='creaking'||m.type==='golem'||m.type==='spider'||m.type==='skeleton'||m.type==='witch')){
         const dx=player.pos.x-m.pos.x,dz=player.pos.z-m.pos.z;
         const dist=Math.hypot(dx,dz);
-        if(dist<1.6&&m.atkT<=0){
+        if(dist<1.6&&m.atkT<=0&&meleeHeightOk(m)){
           damagePlayer(m.type==='enderman'?2:(m.type==='golem'?4:1.5),'被'+({zombie:'僵尸',enderman:'末影人',creaking:'嘎吱怪',golem:'铁傀儡',spider:'蜘蛛',skeleton:'骷髅',witch:'女巫'}[m.type])+'咬了');
           m.atkT=1.0;
         }
@@ -2207,7 +2207,7 @@ function updateSymbiote(m,dt){ // 共生体：飞着追你咬
     m.moving=true;m.walkT+=dt*5;
   }else m.moving=false;
   m.atkT-=dt;
-  if(dist<1.8&&m.atkT<=0&&gameMode==='survival'&&!player.dead){
+  if(dist<1.8&&m.atkT<=0&&gameMode==='survival'&&!player.dead&&meleeHeightOk(m)){
     damagePlayer(3,'被凋零风暴共生体咬了');m.atkT=1.2;
   }
   m.group.position.copy(m.pos);
@@ -2350,6 +2350,15 @@ function drawMobHp(m){
   m.hpShowT=4;
 }
 let attackCd=0; // 近战攻击冷却
+// 🧱 近战垂直判定：水平距离够近 ≠ 够得着。
+// 历史上所有近战判定都只算 Math.hypot(dx,dz)，玩家站在怪正上方（地面 vs 地下矿洞、
+// 两层平台）时水平距离仍是 0，会被隔着整层石头打。容差随怪物身高缩放（蜘蛛矮、
+// 泰坦极高），+1.5 是玩家身高带来的合理余量（跳跃时也能被够到）。
+function meleeHeightOk(m){
+  const mh=m.h||2;
+  const dy=Math.abs((player.pos.y+0.9)-(m.pos.y+mh*0.5));
+  return dy<mh*0.5+1.5;
+}
 function hurtMob(m,dmg){
   if(m.type==='hghast'){showToast('快乐恶魂是好朋友，不会受伤 ❤️');return;}
   if(m.type==='wstorm'&&(m.stage||1)>=4){ // 第4阶段之后刀枪不入
@@ -2402,9 +2411,8 @@ function killMob(m,silent){
     sfx.mobDie();
     spawnBlockParticles(m.pos.x,m.pos.y+0.5,m.pos.z,'rgb(200,60,60)');
     if(m.type==='cow'){
-      const n=Math.floor(Math.random()*3); // 0-2 皮革
-      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.leather,n);
-      if(Math.random()<0.25)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.string,1);
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.leather,1+((Math.random()*2)|0)); // 1-2 皮革
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.raw_beef,1+((Math.random()*3)|0)); // 1-3 生牛肉（烤熟回更多血）
     }else if(m.type==='creaking'){
       const n=1+Math.floor(Math.random()*2); // 1-2 树脂团
       spawnDrop(m.pos.x,m.pos.y+0.8,m.pos.z,I.resin_clump,n);
@@ -2418,13 +2426,14 @@ function killMob(m,silent){
     }else if(m.type==='villager'){
       showToast('😭 村民呜呜地哭了……铁傀儡不会放过你的');
     }else if(m.type==='zombie'){
-      const n=Math.floor(Math.random()*3); // 0-2 腐肉
-      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.rotten_flesh,n);
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.rotten_flesh,1+((Math.random()*2)|0)); // 1-2 腐肉
+      if(Math.random()<0.25)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,Math.random()<0.5?I.carrot:I.potato,1); // 偶尔掉胡萝卜/土豆
+      if(Math.random()<0.06)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.iron_ingot,1); // 小概率掉铁锭
     }else if(m.type==='slime'){
       const n=1+Math.floor(Math.random()*2); // 1-2 黏液球
       spawnDrop(m.pos.x,m.pos.y+0.4,m.pos.z,I.slimeball,n);
     }else if(m.type==='enderman'){
-      if(Math.random()<0.8)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.ender_pearl,1);
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.ender_pearl,1+(Math.random()<0.3?1:0)); // 必掉 1 个，30% 掉 2 个
     }else if(m.type==='him'){
       spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.god_sword,1); // 创世之剑！
       spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.god_core,2+((Math.random()*2)|0)); // 创世之核，做创世盔甲
@@ -2437,19 +2446,23 @@ function killMob(m,silent){
       if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+1,m.pos.z,I.slimeball,1); // 偶尔掉黏液球（酿药水用）
       showToast('🧙 打败女巫了！她掉了治疗药水！');
     }else if(m.type==='pig'){
-      const n=Math.floor(Math.random()*3); // 0-2 皮革
-      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.leather,n);
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.leather,1+((Math.random()*2)|0)); // 1-2 皮革
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.raw_porkchop,1+((Math.random()*3)|0)); // 1-3 生猪排
     }else if(m.type==='sheep'){
       spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,B_WOOL,1+((Math.random()*2)|0)); // 1-2 羊毛
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.raw_beef,1+((Math.random()*2)|0)); // 1-2 生牛肉
     }else if(m.type==='chicken'){
-      if(Math.random()<0.7)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.arrow,1+((Math.random()*2)|0)); // 掉箭（羽毛做的）
+      spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.feather,1+((Math.random()*2)|0)); // 1-2 羽毛（做箭用）
+      if(Math.random()<0.7)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.arrow,1+((Math.random()*2)|0));
     }else if(m.type==='spider'){
-      const n=Math.floor(Math.random()*3); // 0-2 线
-      if(n>0)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.string,n);
+      spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.string,1+((Math.random()*2)|0)); // 1-2 线
+      if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.spider_eye,1); // 50% 蜘蛛眼（酿酒/交易用）
     }else if(m.type==='skeleton'){
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.bone,1+((Math.random()*2)|0)); // 1-2 骨头
       spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.arrow,1+((Math.random()*3)|0)); // 1-3 箭
     }else if(m.type==='creeper'){
-      if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.redstone,1+((Math.random()*2)|0)); // 掉点火药（红石代替）
+      spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.gunpowder,1+((Math.random()*2)|0)); // 1-2 火药
+      if(Math.random()<0.5)spawnDrop(m.pos.x,m.pos.y+0.5,m.pos.z,I.redstone,1+((Math.random()*2)|0)); // 顺带一点红石
     }else if(m.type==='guardian'){
       spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,B_PRISM,1+((Math.random()*2)|0)); // 1-2 海晶石
       if(Math.random()<0.4)spawnDrop(m.pos.x,m.pos.y+0.3,m.pos.z,I.gold_ingot,1); // 偶尔掉金锭
@@ -3263,7 +3276,7 @@ function updateTitan(m,dt){ // 🗿 泰坦：慢慢走过来，一脚把你踩�
   mobMoveAxis(m,'z',m.vel.z*dt);
   mobMoveAxis(m,'y',m.vel.y*dt);
   if(m.blocked&&m.onGround&&m.type!=='witherzilla')m.vel.y=7; // 泰坦跳得超级高，墙挡不住它！
-  if(dist<reach+1&&m.atkT<=0&&!player.dead&&gameMode!=='creative'){
+  if(dist<reach+1&&m.atkT<=0&&!player.dead&&gameMode!=='creative'&&meleeHeightOk(m)){
     damagePlayer(m.type==='witherzilla'?8:5,m.type==='witherzilla'?'被凋零斯拉打了':'被泰坦踩扁了');
     m.atkT=1.6;
     if(dist>0.1){player.vel.x+=dx/dist*12;player.vel.z+=dz/dist*12;player.vel.y=7;} // 一脚踹飞！
