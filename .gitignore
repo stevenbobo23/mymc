@@ -16,3 +16,9 @@ node_modules/
 app/index_original_backup.html
 app/index_working_20260802_premodular.html
 minecraft/
+
+# 部署构建产物（bash scripts/build-dist.sh 生成）
+dist/
+
+# 线上文件备份
+backup/
