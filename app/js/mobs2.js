@@ -45,29 +45,9 @@ function buildVillagerModel(){ // 村民：棕袍子+大鼻子
   }
   return {g,legs};
 }
-function buildGolemModel(){ // 铁傀儡：白白壮壮，手臂超长，身上有藤蔓
-  const g=new THREE.Group();
-  const iron=new THREE.MeshLambertMaterial({color:0xd8d8d0});
-  const vine=new THREE.MeshLambertMaterial({color:0x5a8a3a});
-  const body=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.9,0.5),iron);
-  body.position.y=1.35;g.add(body);
-  const patch=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.34,0.52),vine);
-  patch.position.set(0.25,1.2,0);g.add(patch);
-  const head=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.45,0.45),iron);
-  head.position.y=2.1;g.add(head);
-  const nose=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.22,0.14),new THREE.MeshLambertMaterial({color:0xc09060}));
-  nose.position.set(0,2.0,-0.29);g.add(nose);
-  const brow=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.08,0.08),new THREE.MeshLambertMaterial({color:0x3a3a3a}));
-  brow.position.set(0,2.26,-0.24);g.add(brow);
-  const legs=[],arms=[];
-  for(const s of [-1,1]){
-    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.22,1.1,0.22),iron);
-    arm.position.set(s*0.55,1.25,0);g.add(arm);arms.push(arm);
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.6,0.24),iron);
-    leg.position.set(s*0.2,0.3,0);g.add(leg);legs.push(leg);
-  }
-  return {g,legs,arms};
-}
+// ⚠️ 这里原本还有一份 buildGolemModel()（无眼睛的旧版）。同名 function 声明后者覆盖前者，
+//    生效的一直是文件靠后那份（带深色眼睛的较新版本），这份是纯死代码。已删除，避免
+//    「改了这份却毫无效果」的陷阱 —— 本文件另外两处同类重复已造成过真实功能丢失。
 function buildCowModel(){
   const g=new THREE.Group();
   const brown=new THREE.MeshLambertMaterial({color:0x8d5a2b});
@@ -1074,7 +1054,8 @@ function updateMobs(dt){
     }
   }
 }
-function mobRaycast(){
+function mobRaycast(maxDist){ // 🔱 可传射程：长矛 6.5，其他武器默认 4.3
+  const RANGE=maxDist||4.3;
   const origin=new THREE.Vector3(player.pos.x,player.pos.y+PEYE,player.pos.z);
   const dir=new THREE.Vector3(
     -Math.sin(player.yaw)*Math.cos(player.pitch),
@@ -1090,7 +1071,7 @@ function mobRaycast(){
     const hit=ray.intersectBox(box,new THREE.Vector3());
     if(hit){
       const d=hit.distanceTo(origin);
-      if(d<4.3&&(!best||d<best.d))best={mob:m,d};
+      if(d<RANGE&&(!best||d<best.d))best={mob:m,d};
     }
   }
   return best;
@@ -2348,43 +2329,11 @@ function stormDefeated(){
   showToast('🏆 你打败了凋零风暴！！！获得了💜风暴之心！可以合成风暴之剑啦！');
   sfx.craft();
 }
-function tryAttackMob(){
-  if(!inputEnabled())return;
-  const held0=heldItemId();
-  const it0=held0?ITEMS[held0]:null;
-  const isSpear=it0&&it0.toolType==='spear';
-  const hit=mobRaycast(isSpear?6.5:4.3); // 🔱 长矛戳得更远！
-  if(!hit)return;
-  const held=heldItemId();
-  const it=held?ITEMS[held]:null;
-  const hstack=inv.hot[player.sel];
-  const sharp=hstack&&hstack.ench?(hstack.ench.sharp||0):0;
-  let dmg=(it&&it.type==='tool'?it.dmg:1)+2*sharp;
-  // 🔱 长矛：跑得越快，戳得越痛！冲刺+跳跃戳最猛！
-  if(it&&it.toolType==='spear'){
-    const spd=Math.hypot(player.vel.x,player.vel.z);
-    const mul=1+spd*0.22+(!player.onGround?0.5:0); // 冲刺≈2.4倍，跳劈再多半倍
-    dmg=Math.round(dmg*mul);
-    if(spd>5)spawnBlockParticles(hit.mob.pos.x,hit.mob.pos.y+1,hit.mob.pos.z,'rgb(255,220,120)');
-  }
-  hurtMob(hit.mob,dmg);
-  if(held===I.infinity_sword)swordRain(hit.mob.pos.x,hit.mob.pos.z); // 天降剑雨！
-  if(held===I.dragon_egg_sword)swordRain(hit.mob.pos.x,hit.mob.pos.z,I.dragon_egg,8,'rgb(60,40,110)'); // 天降龙蛋雨！
-  if(held===I.cosmos_sword){ // 🌌 寰宇支配之剑：把怪打上天+天降 16 把剑！
-    hit.mob.vel.y=8;
-    swordRain(hit.mob.pos.x,hit.mob.pos.z,I.cosmos_sword,10,'rgb(74,255,74)',16);
-    spawnBlockParticles(hit.mob.pos.x,hit.mob.pos.y+1,hit.mob.pos.z,'rgb(74,255,74)');
-  }
-  attackCd=0.5;
-}
-// 怪物头顶的生命值爱心条（被打后显示 4 秒）
-function makeHpSprite(){
-  const cv=document.createElement('canvas');cv.width=76;cv.height=18;
-  const tex=new THREE.CanvasTexture(cv);tex.magFilter=THREE.NearestFilter;
-  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false,transparent:true}));
-  sp.scale.set(1.35,0.32,1);sp.visible=false;
-  return {sp,cv,tex};
-}
+// ⚠️ 这里原本有一份重复的 tryAttackMob() 定义（长矛射程6.5 / 冲刺伤害倍率 / 无限剑天降剑雨 /
+//    龙蛋雨 / 寰宇之剑击飞）。因为 function 声明会被 hoisting，后定义的那份静默覆盖了它，
+//    整段变成死代码 —— 上面这些武器特效玩家永远看不到。已删除，独有逻辑全部并入下方生效版。
+// ⚠️ 这里原本重复定义了一份 makeHpSprite()（与文件靠后那份逐字节完全相同，md5 一致）。
+//    同名 function 后者覆盖前者，两份行为一致所以没暴露出 bug，但留着极易「改了这份却不生效」，已删除。
 function drawMobHp(m){
   if(!m.hpBar)m.hpBar=makeHpSprite();
   const {sp,cv,tex}=m.hpBar;
@@ -2539,6 +2488,7 @@ function killMob(m,silent){
       setBlock(0,36,0,B_ENDPORTAL);
       spawnBlockParticles(0.5,37,0.5,'rgb(200,120,255)');
       showToast('🎉 打败末影龙了！岛中心开启了回家的传送门！');
+      if(modsOn.oneblock&&oneBlockPos)showOneBlockWin(); // ☝️ 单格方块生存：打败末影龙就是通关（以前这个结算函数从没被调用，通关没任何反馈）
       updateTasks();saveGame();
     }
   }
@@ -2624,14 +2574,29 @@ function tryAttackMob(){
   }
   const held=heldItemId();
   const it=held?ITEMS[held]:null;
+  const isSpear=!!(it&&it.toolType==='spear');
   const hstack=inv.hot[player.sel];
   const sharp=hstack&&hstack.ench?(hstack.ench.sharp||0):0;
-  const dmg=(it&&it.type==='tool'?it.dmg:1)+2*sharp;
-  // 近战目标：怪物优先，其次远程玩家（取更近者）
-  const mh=mobRaycast(), ph=playerRaycast();
+  let dmg=(it&&it.type==='tool'?it.dmg:1)+2*sharp;
+  // 🔱 长矛：跑得越快戳得越痛（冲刺≈2.4倍，跳劈再多半倍）
+  if(isSpear){
+    const spd=Math.hypot(player.vel.x,player.vel.z);
+    dmg=Math.round(dmg*(1+spd*0.22+(!player.onGround?0.5:0)));
+  }
+  // 近战目标：怪物优先，其次远程玩家（取更近者）；长矛能戳到 6.5，其他武器 4.3
+  const mh=mobRaycast(isSpear?6.5:4.3), ph=playerRaycast();
   if(!mh&&!ph)return;
   if(mh&&(!ph||mh.d<=ph.d)){
+    if(isSpear&&Math.hypot(player.vel.x,player.vel.z)>5)spawnBlockParticles(mh.mob.pos.x,mh.mob.pos.y+1,mh.mob.pos.z,'rgb(255,220,120)');
     hurtMob(mh.mob,dmg);
+    // ✨ 武器特效（原先写在被 hoisting 覆盖的重复定义里 → 玩家永远看不到，现已并入）
+    if(held===I.infinity_sword)swordRain(mh.mob.pos.x,mh.mob.pos.z); // 天降剑雨！
+    if(held===I.dragon_egg_sword)swordRain(mh.mob.pos.x,mh.mob.pos.z,I.dragon_egg,8,'rgb(60,40,110)'); // 天降龙蛋雨！
+    if(held===I.cosmos_sword){ // 🌌 寰宇支配之剑：把怪打上天 + 天降 16 把剑！
+      mh.mob.vel.y=8;
+      swordRain(mh.mob.pos.x,mh.mob.pos.z,I.cosmos_sword,10,'rgb(74,255,74)',16);
+      spawnBlockParticles(mh.mob.pos.x,mh.mob.pos.y+1,mh.mob.pos.z,'rgb(74,255,74)');
+    }
     if(NET.open&&!NET.isHost&&mh.mob.nid)netBroadcast({t:'mobhit',id:mh.mob.nid,dmg}); // 客人攻击：同步给房主结算
   }else if(ph){
     // PVP：广播伤害给被攻击者（对方本地扣血 + 击退），防双端重复结算

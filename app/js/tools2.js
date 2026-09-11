@@ -834,9 +834,21 @@ function armorMats(){
 }
 let nextItemId=100;
 const I={}; // 命名物品 id 表
+// ⚠️ 100~103 这四个物品位被「方块物品」占用（红石块/嘎吱核心/灰树叶/避雷针）：
+//    blockItemEntry(b) 直接拿方块 id 当物品 id，循环跑到 b<=B_ROD(103)，
+//    与 defItem 从 100 递增的分配在此区间撞车，方块物品后注册会把真物品顶掉。
+//    修法：defItem 撞到这段时，把「分配出去的 id」让到高位空闲段（900+），
+//    但 nextItemId 仍然照常自增 —— 于是除让位的这 4 个物品外，
+//    其余物品 id 一个都不变，老存档零风险。
+const ITEM_ID_TAKEN_LO=100, ITEM_ID_TAKEN_HI=B_ROD;
+let itemIdSpill=900; // 让位物品的高位 id 池
 function defItem(key,name,opt){
   opt=opt||{};
-  const id=nextItemId++;
+  let id=nextItemId++;
+  if(id>=ITEM_ID_TAKEN_LO&&id<=ITEM_ID_TAKEN_HI){
+    while(ITEMS[itemIdSpill])itemIdSpill++;
+    id=itemIdSpill++;
+  }
   I[key]=id;
   ITEMS[id]={id,key,name,
     icon:opt.icon||null,       // 绘制函数(ctx)

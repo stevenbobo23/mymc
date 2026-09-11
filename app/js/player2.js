@@ -74,6 +74,8 @@ function physicsStep(dt,input){
   player.vel.x=lerp(player.vel.x,dirX*speed,clamp(ctrl*dt*12,0,1));
   player.vel.z=lerp(player.vel.z,dirZ*speed,clamp(ctrl*dt*12,0,1));
   // 重力/跳跃
+  // ⚠️ 非创造模式一律清掉飞行标记：否则「创造起飞 → 切生存 → 切回创造」会直接悬在半空
+  if(gameMode!=='creative')flying=false;
   if(gameMode==='creative'&&flying){
     // 创造模式：飞行（跳跃=上升，Shift/下降键=下降，否则悬停）；双击Shift可关闭
     const flySp=input.sprint?11:6.5;
@@ -470,7 +472,7 @@ function raycastVoxel(maxDist){
 }
 
 // ---------------- 挖掘/放置 ----------------
-let mineTarget=null,mineProgress=0,mineTickT=0;
+let mineTarget=null,mineProgress=0,mineTickT=0,cmdHitCd=0;
 let curTarget=null;
 function heldItemId(){
   const s=inv.hot[player.sel];
@@ -612,6 +614,15 @@ function updateMining(dt){
   // 枪战模式：只允许挖玩家放置/改动过的方块（掩体等，blockDiff 有记录），竞技场原生方块保护
   const t0=curTarget;
   const playerChanged=t0&&blockDiff[t0.x+','+t0.y+','+t0.z]!==undefined;
+  // 🌪 风暴体内：中间的命令方块挖不动，但按住左键就是「打它」——打 4 下风暴就死
+  //    （以前 hitCommandBlock() 零调用，钻进身体后没有任何办法打掉弱点，等于进去就出不来。）
+  if(curTarget&&curTarget.block===B_COMMAND&&stormState.cmdHp>0&&mining&&inputEnabled()
+     &&Math.hypot(player.pos.x-(STORM_ROOM.x+5.5),player.pos.z-(STORM_ROOM.z+5.5))<8){
+    bar.style.display='none';mineProgress=0;mineTarget=null;
+    cmdHitCd-=dt;
+    if(cmdHitCd<=0){cmdHitCd=0.65;hitCommandBlock();}
+    return;
+  }
   // 🔱 拿着长矛按住挖掘键是「戳刺」，不会挖坏方块！
   const heldIt=heldItemId()?ITEMS[heldItemId()]:null;
   if((gameMode==='shooter'&&!playerChanged)||!mining||!curTarget||!inputEnabled()||mobRaycast()||(heldIt&&heldIt.toolType==='spear')){
@@ -824,6 +835,15 @@ function interactOrPlace(){
   }
   // 末影珍珠：扔出去传送到 8 格以外
   if(heldItemId()===I.ender_pearl){
+    // 🌪 凋零风暴被炸弹炸出伤口后：对着它扔末影珍珠就能钻进它身体里（打中间的命令方块）
+    //    以前 enterStorm() 零调用 —— 第 7 阶段撕裂的「大口子」是个死机制，进不去也打不赢。
+    if(stormState.wound&&stormState.mob&&!stormState.mob.dead){
+      const sm=stormState.mob;
+      if(Math.hypot(player.pos.x-sm.pos.x,player.pos.z-sm.pos.z)<14){
+        if(gameMode!=='creative')consumeHeld(1);
+        enterStorm();return;
+      }
+    }
     const dx=-Math.sin(player.yaw),dz=-Math.cos(player.yaw);
     const tx=Math.floor(player.pos.x+dx*8),tz=Math.floor(player.pos.z+dz*8);
     player.pos.set(tx+0.5,surfaceY(tx,tz)+1,tz+0.5);
@@ -845,6 +865,17 @@ function interactOrPlace(){
   if(mh&&mh.mob.type==='villager'&&mh.d<4.2){openTrade();return;}
   const t0=raycastVoxel(5.2);
   if(t0){
+    // 🌪 凋零风暴模组：祭坛点一下开始充能（1分钟后风暴苏醒）；恐怖炸弹点一下把风暴炸出伤口
+    //    以前这两个方块有配方、能合成、能摆放，但这里没有分支 → 右键毫无反应，
+    //    整条「祭坛→苏醒→炸弹→钻进体内→打命令方块→拿风暴之心」的链子玩家走不到第一步。
+    if(t0.block===B_ALTAR){
+      if(!modsOn.storm){showToast('🔒 要先在开始界面打开🌪凋零风暴模组哦！');return;}
+      activateAltar(t0);return;
+    }
+    if(t0.block===B_BOMB){
+      if(!modsOn.storm){showToast('🔒 要先在开始界面打开🌪凋零风暴模组哦！');return;}
+      handleBombTap(t0);return;
+    }
     // 💥 炸弹们：点一下就炸！
     if(t0.block===B_TNT){setBlock(t0.x,t0.y,t0.z,0);explode(t0.x+0.5,t0.y+0.5,t0.z+0.5,3,8);showToast('💥 砰！');return;}
     if(t0.block===B_SUPER_TNT){setBlock(t0.x,t0.y,t0.z,0);explode(t0.x+0.5,t0.y+0.5,t0.z+0.5,5,16);showToast('💥💥 超级大爆炸！');return;}
@@ -955,6 +986,15 @@ function interactOrPlace(){
       if(!modsOn.titan){showToast('🔒 要先在开始界面打开泰坦模组哦！');return;}
       spawnMob(titanEggType,t0.x,t0.z,t0.y+1);
       showToast('🌍 轰隆隆！'+(TITAN_NAMES[titanEggType]||'泰坦')+'出现了！！');
+      return;
+    }
+    // 👁 HIM 刷怪蛋：放出白眼大魔王（属于 HIM 模组，不是泰坦模组，所以单独接线）
+    //    以前 him_egg 有物品、有配方，但没有任何右键处理 —— HIM 这只完整实现过的怪（模型/AI/闪电/瞬移/掉创世剑）
+    //    在整个游戏里从来没有出场的机会，spawnMob('him') 零调用。
+    if(heldItemId()===I.him_egg){
+      if(!modsOn.him){showToast('🔒 要先在开始界面打开👁HIM模组哦！');return;}
+      spawnMob('him',t0.x,t0.z,t0.y+1);
+      showToast('👁 白眼大魔王 HIM 出现了！！小心他的闪电和瞬移！');
       return;
     }
     // 🔥 打火石：点矿石门框点燃维度传送门；点别的地方就着火！

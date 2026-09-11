@@ -99,6 +99,9 @@ function touchSaveMeta(id){
   if(s){s.time=Date.now();s.seed=SEED;s.gameMode=gameMode;s.dim=curDim;s.blocks=Object.keys(blockDiff).length;}
   writeSaveIndex(idx);
 }
+// 存档版本：每做一次 id 迁移/结构变更就 +1；读档时按 save.v 判断要不要跑迁移
+// （以前是 `save.v===1` 且 writeSave 永远写 v=1 → 每次读档都跑迁移，没法安全演进）
+const SAVE_V=2;
 function saveGame(slotId){
   if(!started||player.dead)return;
   if(gameMode==='parkour')return; // 跑酷：单局模式不存档（存档恢复不支持，避免污染存档槽）
@@ -109,7 +112,7 @@ function saveGame(slotId){
   DIMS[curDim].fac={};Object.assign(DIMS[curDim].fac,facings);
   DIMS[curDim].furn={};Object.assign(DIMS[curDim].furn,furnStates);
   DIMS[curDim].chest={};Object.assign(DIMS[curDim].chest,chestStates);
-  const s={v:1,seed:SEED,dayTime,gameMode,skinIdx,dim:curDim,dims:DIMS,
+  const s={v:SAVE_V,seed:SEED,dayTime,gameMode,skinIdx,dim:curDim,dims:DIMS,
     px:player.pos.x,py:player.pos.y,pz:player.pos.z,
     yaw:player.yaw,pitch:player.pitch,hp:player.hp,
     sp:[spawnPoint.x,spawnPoint.y,spawnPoint.z],
@@ -191,6 +194,7 @@ function loop(t){
   updateEshots(dt); // 凋零骷髅头弹幕
   updateSplash(dt); // 扔出去的药水
   if(typeof updateHandTick==='function'){if(!spearInitDone&&camera&&typeof initSpearView==='function')initSpearView();updateHandTick(dt);} // 长矛视图 + 冲刺检测
+  if(typeof spearRamTick==='function')spearRamTick(dt); // 🔱 长矛冲刺撞击（以前从没被调用：拿着矛冲锋撞怪完全没伤害）
   updateFlyBlocks(dt); // 被凋零风暴吸起来的方块
   altarChargeTick(dt); // 祭坛充能倒计时
   if(gameMode==='skyblock')updateSaplings(dt); // 空岛：树苗成长
@@ -482,6 +486,7 @@ function setupWorld(seed,save){
     for(const dn of ['overworld','nether','end']){DIMS[dn].diff={};DIMS[dn].fac={};DIMS[dn].furn={};DIMS[dn].chest={};DIMS[dn].pos=null;}
   }
   cityBuilt=false; // 结构 tick 状态重置（新世界允许重新生成远古城市）
+  cityEntranceBuilt=false; // 同理：灯塔入口也要允许重建，否则新世界里古城没有入口
   for(const k in chunks)delete chunks[k];
   clearWorldMeshes();
   for(const k in blockDiff)delete blockDiff[k];
@@ -509,11 +514,13 @@ function setupWorld(seed,save){
     // 恢复维度
     if(save.dim==='nether'||save.dim==='end')curDim=save.dim;else curDim='overworld';
     if(save.dims){
-      for(const dn of ['overworld','nether','end']){
-        if(save.dims[dn]){
-          DIMS[dn].diff=save.dims[dn].diff||{};DIMS[dn].fac=save.dims[dn].fac||{};
-          DIMS[dn].furn=save.dims[dn].furn||{};DIMS[dn].chest=save.dims[dn].chest||{};DIMS[dn].pos=save.dims[dn].pos||null;
-        }
+      // ⚠️ 必须遍历 DIMS 的全部键：存档写了 10 个维度（含 7 个矿石维度），
+      //    以前硬编码 ['overworld','nether','end'] 会让矿石维度里挖的矿/放的箱子重登后全丢
+      for(const dn of Object.keys(DIMS)){
+        const sd=save.dims[dn];
+        if(!sd)continue;
+        DIMS[dn].diff=sd.diff||{};DIMS[dn].fac=sd.fac||{};
+        DIMS[dn].furn=sd.furn||{};DIMS[dn].chest=sd.chest||{};DIMS[dn].pos=sd.pos||null;
       }
     }
     Object.assign(blockDiff,save.diff||{});
@@ -524,16 +531,20 @@ function setupWorld(seed,save){
     if(save.gameMode==='creative'||save.gameMode==='survival'||save.gameMode==='skyblock')gameMode=save.gameMode;
     if(typeof save.skinIdx==='number'&&save.skinIdx>=0&&save.skinIdx<SKINS.length)skinIdx=save.skinIdx;
     if(save.hot&&save.hot.length===9)inv.hot=save.hot;
-    // 🌱 树苗 id 迁移：49（旧红石粉冲突前）→ 75；旧存档方块 diff 里的 49 同步迁移
-    if(save.v===1){
-      const migrateStack=s=>{if(s&&s.id===49){s.id=75;}return s;};
-      inv.hot=inv.hot.map(migrateStack);
-      if(inv.store)inv.store=inv.store.map(migrateStack);
-      for(const k in blockDiff)if(blockDiff[k]===49)blockDiff[k]=75; // 树苗方块
-      for(const dn of ['overworld','nether','end']){const D=DIMS[dn];if(D&&D.diff)for(const k in D.diff)if(D.diff[k]===49)D.diff[k]=75;}
-    }
+    // ⚠️ 顺序关键：必须先把 store/armor 从存档恢复出来，再做 id 迁移。
+    //    以前 store 的恢复写在迁移之后，会把刚迁移好的数组用未迁移的 save.store 覆盖回去，
+    //    导致旧档「仓库」里的树苗仍然是 49 → 显示成红石线。
     if(save.store&&save.store.length===27)inv.store=save.store;
     if(save.armor&&save.armor.length===4)inv.armor=save.armor;
+    // 🌱 树苗 id 迁移（仅 save.v<2 的老档）：49（红石粉让位前）→ 75；方块 diff 同步迁移
+    if(!save.v||save.v<2){
+      const migrateStack=s=>{if(s&&s.id===49)s.id=75;return s;};
+      inv.hot=inv.hot.map(migrateStack);
+      if(inv.store)inv.store=inv.store.map(migrateStack);
+      if(inv.armor)inv.armor=inv.armor.map(migrateStack);
+      for(const k in blockDiff)if(blockDiff[k]===49)blockDiff[k]=75; // 树苗方块
+      for(const dn of Object.keys(DIMS)){const D=DIMS[dn];if(D&&D.diff)for(const k in D.diff)if(D.diff[k]===49)D.diff[k]=75;}
+    }
     if(save.tasks)for(let i=0;i<TASKS.length&&i<save.tasks.length;i++)TASKS[i].done=!!save.tasks[i];
     if(typeof save.hp==='number')player.hp=save.hp;
     dragonKilled=!!save.dragonKilled;

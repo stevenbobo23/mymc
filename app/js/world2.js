@@ -569,6 +569,7 @@ function ancientCityTick(){
   const cp=getCityPos();
   if(Math.hypot(player.pos.x-cp.x,player.pos.z-cp.z)<110){
     cityBuilt=true;
+    buildCityEntrance(); // 🏛 先在地面立起发光灯塔 + 往下挖一条竖井（以前这个函数从没被调用，古城只能靠瞎挖）
     buildAncientCity(cp.x,cp.z);
     // 😱 城里本来就住着一只坚守者！它在黑暗里走来走去……
     let wardens=0;

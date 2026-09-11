@@ -705,6 +705,7 @@ function openBook(){openPanel('bookPanel');}
 // ---------------- 指令系统（管理员=房主） ----------------
 function applyGameMode(m,silent){
   gameMode=m;
+  if(gameMode!=='creative')flying=false; // ⚠️ 离开创造必须收起飞翔状态，否则切回创造时会直接悬空
   const fd=$('btnFlyDown');
   if(fd)fd.classList.toggle('hidden',gameMode!=='creative');
   const gh=$('gunHud'),gb=$('gunBoard');
