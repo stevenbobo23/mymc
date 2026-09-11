@@ -586,7 +586,7 @@ function breakTimeFor(b,held){
   if(!isFinite(def.hard)){
     if(b===B_BEDROCK&&modsOn.titan&&held===I.obsidian_pickaxe)return 25; // 🗿 泰坦模组：黑曜石镐能慢慢挖动基岩！
     return Infinity;
-  }return Infinity;
+  }
   const it=held?ITEMS[held]:null;
   if(it&&it.type==='tool'&&def.tool&&it.toolType===def.tool&&it.tier>=def.minTier){
     const st=inv.hot[player.sel];
